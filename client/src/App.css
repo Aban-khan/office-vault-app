@@ -1,0 +1,313 @@
+/* =========================================
+   1. COLOR VARIABLES (Coffee & Cream Theme)
+   ========================================= */
+:root {
+  /* Backgrounds */
+  --bg-cream: #F5F5DC;       /* Main page background */
+  --card-latte: #FFF8E7;     /* Form/Card background */
+  
+  /* Text Colors */
+  --text-espresso: #3E2723;  /* Headings & Dark Text */
+  --text-mocha: #5D4037;     /* Secondary Text */
+  
+  /* Buttons & UI Elements */
+  --btn-brown: #795548;      /* Primary Button */
+  --btn-hover: #5D4037;      /* Button Hover State */
+  --border-caramel: #D7CCC8; /* Borders */
+  
+  /* Status Colors */
+  --error-red: #D32F2F;
+  --success-green: #388E3C;
+}
+
+/* =========================================
+   2. GLOBAL STYLES (Reset & Typography)
+   ========================================= */
+* {
+  box-sizing: border-box; /* Crucial for mobile sizing */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-cream);
+  color: var(--text-espresso);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  margin-top: 0;
+  color: var(--text-espresso);
+}
+
+/* =========================================
+   3. LAYOUT CONTAINERS
+   ========================================= */
+/* Limits width on PC, but full width on Mobile */
+.admin-container {
+  width: 100%;
+  max-width: 600px; 
+  margin: 0 auto;   /* Centers the container */
+  padding: 20px;
+  min-height: 100vh; /* Full height */
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-top: 1rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.header p {
+  color: var(--text-mocha);
+  font-size: 1.1rem;
+}
+
+/* =========================================
+   4. CARD & FORM STYLES
+   ========================================= */
+.upload-card {
+  background-color: var(--card-latte);
+  padding: 25px;
+  border-radius: 16px; /* Soft rounded corners */
+  border: 1px solid var(--border-caramel);
+  box-shadow: 0 4px 20px rgba(62, 39, 35, 0.15); /* Soft brown shadow */
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-espresso);
+  font-size: 0.95rem;
+}
+
+/* Inputs are large and easy to tap */
+.form-input {
+  width: 100%;
+  padding: 14px; /* Large padding for thumbs */
+  border: 2px solid var(--border-caramel);
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-size: 16px; /* PREVENTS ZOOMING on iPhone */
+  color: var(--text-espresso);
+  transition: border-color 0.3s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--btn-brown);
+}
+
+/* Textarea specific resize */
+textarea.form-input {
+  resize: vertical;
+  min-height: 100px;
+}
+
+/* =========================================
+   5. CUSTOM FILE UPLOAD (Mobile Friendly)
+   ========================================= */
+.file-upload-wrapper {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+/* The invisible real input */
+.file-input-hidden {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2; /* Sits on top */
+}
+
+/* The visible button underneath */
+.file-upload-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #fff;
+  border: 2px dashed var(--btn-brown);
+  color: var(--btn-brown);
+  padding: 15px;
+  border-radius: 8px;
+  font-weight: bold;
+  width: 100%;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.file-upload-wrapper:hover .file-upload-btn {
+  background-color: #fcf4f2; /* Very light brown hover */
+}
+
+/* =========================================
+   6. PROJECT LIST CARDS (NEW ADDITION)
+   ========================================= */
+.project-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 25px; /* Adds space between form and list */
+}
+
+/* Individual Project Card */
+.project-card {
+  background-color: #FFFFFF !important;
+  border: 1px solid #D7CCC8 !important; /* Caramel border */
+  border-left: 6px solid #795548 !important; /* Thick brown accent on left */
+  border-radius: 10px !important;
+  padding: 20px;
+  box-shadow: 0 2px 5px rgba(62, 39, 35, 0.08);
+  transition: transform 0.2s;
+  position: relative;
+}
+
+.project-card:hover {
+  transform: translateY(-3px); /* Slight lift on hover */
+  box-shadow: 0 6px 15px rgba(62, 39, 35, 0.15);
+}
+
+/* Header: Title and Delete Button */
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed #D7CCC8;
+  padding-bottom: 8px;
+}
+
+.project-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #3E2723;
+  margin: 0;
+}
+
+/* The Description Text */
+.project-desc {
+  color: #5D4037;
+  font-size: 0.95rem;
+  margin-bottom: 15px;
+  line-height: 1.4;
+}
+
+/* Footer: Submitter info and View Button */
+.project-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #8D6E63;
+}
+
+/* "View File" Button - Clean Pill Style */
+.view-file-btn {
+  background-color: #FFF8E7 !important; /* Latte background */
+  color: #795548 !important; /* Brown text */
+  border: 1px solid #795548 !important;
+  padding: 6px 14px !important;
+  font-size: 0.85rem !important;
+  border-radius: 20px !important; /* Pill shape */
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.view-file-btn:hover {
+  background-color: #795548 !important;
+  color: white !important;
+}
+
+/* Delete Button styling (icon only) */
+.delete-btn-icon {
+  background: none !important;
+  border: none !important;
+  color: #D32F2F !important; /* Red for delete */
+  cursor: pointer;
+  padding: 5px;
+  font-size: 1.2rem;
+  transition: transform 0.2s;
+}
+.delete-btn-icon:hover {
+  transform: scale(1.2);
+}
+
+/* ============================================================
+   FORCE COFFEE THEME OVERRIDES (BOOTSTRAP FIXES)
+   ============================================================ */
+
+/* 1. FORCE BACKGROUND (Cream) */
+body, #root, .App, .container-fluid {
+  background-color: #F5F5DC !important; /* Cream Base */
+  min-height: 100vh;
+}
+
+/* 2. FORCE HEADER/NAVBAR (Espresso) */
+nav, .navbar, .header, header {
+  background-color: #3E2723 !important; /* Dark Espresso */
+  color: #FFF8E7 !important; /* Latte Text */
+  box-shadow: 0 4px 6px rgba(62, 39, 35, 0.3) !important;
+}
+
+/* 3. FORCE CARDS & FORMS (Latte White) */
+.card, .form-container, .shadow-sm, .bg-white {
+  background-color: #FFF8E7 !important; /* Soft Latte */
+  border: 1px solid #D7CCC8 !important; /* Caramel Border */
+  color: #3E2723 !important; /* Dark Brown Text */
+  border-radius: 15px !important;
+}
+
+/* 4. FORCE BUTTONS (Mocha Brown) */
+button, .btn, .btn-primary, .btn-success, .btn-danger {
+  background-color: #795548 !important; /* Mocha Brown */
+  border: none !important;
+  color: white !important;
+  font-weight: bold !important;
+  padding: 12px 20px !important;
+  border-radius: 8px !important;
+  margin-right: 10px !important;
+}
+
+button:hover, .btn:hover {
+  background-color: #5D4037 !important; /* Darker Roast on Hover */
+}
+
+/* 5. FORCE INPUTS */
+input, select, textarea, .form-control {
+  background-color: #FFFFFF !important;
+  border: 2px solid #D7CCC8 !important; /* Caramel Border */
+  color: #3E2723 !important;
+  border-radius: 8px !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: #795548 !important; /* Brown focus border */
+  box-shadow: 0 0 5px rgba(121, 85, 72, 0.5) !important;
+}
+
+/* 6. FORCE TEXT HEADINGS */
+h1, h2, h3, h4, h5, label {
+  color: #3E2723 !important; /* Espresso Color */
+}

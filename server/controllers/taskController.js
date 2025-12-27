@@ -1,4 +1,5 @@
 const Task = require('../models/Task');
+const User = require('../models/User'); // <--- 1. NEW IMPORT (Required to find employees)
 const fs = require('fs');
 
 // @desc    Assign a new task
@@ -16,6 +17,36 @@ const createTask = async (req, res) => {
       filePath = req.file.path;
     }
 
+    // --- 2. NEW LOGIC: Handle "All Employees" ---
+    if (assignedTo === 'all') {
+      
+      // Find all users who are NOT 'admin'
+      const allEmployees = await User.find({ role: { $ne: 'admin' } });
+
+      if (allEmployees.length === 0) {
+        return res.status(400).json({ message: 'No employees found to assign task to' });
+      }
+
+      // Create a task object for every single employee
+      const tasksToCreate = allEmployees.map(employee => ({
+        title,
+        description,
+        priority,
+        assignedTo: employee._id, // Assign to this specific employee
+        file: filePath,
+        status: 'Pending',
+        employeeReply: ''
+      }));
+
+      // Insert all tasks into the database at once
+      await Task.insertMany(tasksToCreate);
+
+      // Return a special success message
+      return res.status(201).json({ message: 'Task assigned to ALL employees successfully', isBulk: true });
+    }
+    // ---------------------------------------------
+
+    // 3. OLD LOGIC: Handle Single Employee Assignment
     const task = await Task.create({
       title,
       description,
@@ -66,7 +97,7 @@ const updateTask = async (req, res) => {
       task.status = req.body.status;
     }
 
-    // --- NEW: Update Employee Reply if provided ---
+    // Update Employee Reply if provided
     if (req.body.employeeReply !== undefined) {
       task.employeeReply = req.body.employeeReply;
     }

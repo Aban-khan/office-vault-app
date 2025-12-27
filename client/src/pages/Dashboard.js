@@ -44,7 +44,6 @@ const Dashboard = () => {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       
-      // UPDATED URLs
       const reqTasks = axios.get(`${API_BASE}/tasks`, config);
       const reqProjects = axios.get(`${API_BASE}/projects`, config);
       
@@ -87,12 +86,26 @@ const Dashboard = () => {
       formData.append('assignedTo', assignedTo);
       if (taskFile) formData.append('file', taskFile);
       
-      // UPDATED URL
+      // Send Request
       const { data } = await axios.post(`${API_BASE}/tasks`, formData, config);
-      setTasks([...tasks, data]);
       
-      setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo('');
-      alert('Task Assigned!');
+      // --- 🔥 UPDATED LOGIC FOR "ALL EMPLOYEES" ---
+      if (assignedTo === 'all') {
+          alert('Task Assigned to Everyone! 📢');
+          // Reload data so the admin sees all the new tasks created
+          fetchData(currentUser.token); 
+      } else {
+          // Normal single task add
+          setTasks([...tasks, data]);
+          alert('Task Assigned!');
+      }
+
+      // Reset Form
+      setTaskTitle(''); 
+      setTaskDesc(''); 
+      setTaskFile(null); 
+      setAssignedTo(''); 
+
     } catch (error) {
       alert('Error creating task');
     }
@@ -101,7 +114,6 @@ const Dashboard = () => {
   const handleApproveUser = async (id) => {
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        // UPDATED URL
         await axios.put(`${API_BASE}/auth/approve/${id}`, {}, config);
         alert('User Approved!');
         fetchData(currentUser.token); 
@@ -114,7 +126,6 @@ const Dashboard = () => {
     if(!window.confirm("Reject and delete this user request?")) return;
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        // UPDATED URL
         await axios.delete(`${API_BASE}/auth/reject/${id}`, config);
         fetchData(currentUser.token);
     } catch (error) {
@@ -133,7 +144,6 @@ const Dashboard = () => {
       for (let i = 0; i < projFiles.length; i++) {
         formData.append('files', projFiles[i]);
       }
-      // UPDATED URL
       const { data } = await axios.post(`${API_BASE}/projects`, formData, config);
       setProjects([data, ...projects]); 
       setProjTitle(''); setProjDesc(''); setProjFiles([]); 
@@ -153,7 +163,6 @@ const Dashboard = () => {
     }
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      // UPDATED URL
       const { data } = await axios.put(`${API_BASE}/projects/${projectId}/add`, formData, config);
       setProjects(projects.map(p => p._id === projectId ? data : p));
       alert('File added successfully!');
@@ -166,7 +175,6 @@ const Dashboard = () => {
     if(!window.confirm("Delete this specific file?")) return;
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        // UPDATED URL
         const { data } = await axios.put(`${API_BASE}/projects/${projectId}/remove-file`, { filePath }, config);
         setProjects(projects.map(p => p._id === projectId ? data : p));
     } catch (error) {
@@ -178,7 +186,6 @@ const Dashboard = () => {
     setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      // UPDATED URL
       await axios.put(`${API_BASE}/tasks/${taskId}`, { status: newStatus }, config);
     } catch (error) {
       fetchData(currentUser.token);
@@ -190,7 +197,6 @@ const Dashboard = () => {
     if (!message) return alert("Please type a message first");
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      // UPDATED URL
       const { data } = await axios.put(`${API_BASE}/tasks/${taskId}`, { employeeReply: message }, config);
       setTasks(tasks.map(t => t._id === taskId ? data : t));
       setReplyTexts({ ...replyTexts, [taskId]: '' });
@@ -205,7 +211,6 @@ const Dashboard = () => {
     if(!window.confirm("Delete this task?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      // UPDATED URL
       await axios.delete(`${API_BASE}/tasks/${id}`, config);
       setTasks(tasks.filter(t => t._id !== id)); 
     } catch (error) {
@@ -217,7 +222,6 @@ const Dashboard = () => {
     if(!window.confirm("Delete this ENTIRE project?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      // UPDATED URL
       await axios.delete(`${API_BASE}/projects/${id}`, config);
       setProjects(projects.filter(p => p._id !== id)); 
     } catch (error) {
@@ -276,10 +280,14 @@ const Dashboard = () => {
                         <option value="Medium">Medium</option>
                         <option value="High">High</option>
                     </select>
+
+                    {/* 🔥 UPDATED DROPDOWN WITH ALL OPTION */}
                     <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2 border rounded bg-gray-50">
                         <option value="">-- Select Employee --</option>
+                        <option value="all">📢 ALL EMPLOYEES</option> 
                         {employees.map(e => (<option key={e._id} value={e._id}>{e.name}</option>))}
                     </select>
+
                     <input type="file" className="text-sm" onChange={(e) => setTaskFile(e.target.files[0])} />
                     <button className="py-2 text-white bg-green-600 rounded">Create Task</button>
                   </form>
@@ -316,7 +324,6 @@ const Dashboard = () => {
                     <div>
                       <h3 className="font-bold mr-6">{task.title}</h3>
                       <p className="text-sm text-gray-600">{task.description}</p>
-                      {/* FILE LINK - ALREADY CORRECT IN YOUR CODE, BUT KEPT HERE */}
                       {task.file && <a href={`${API_BASE}/${task.file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="text-blue-600 text-sm block mt-1">📎 Attachment</a>}
                     </div>
                     <div className="mt-4">

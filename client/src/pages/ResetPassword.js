@@ -5,13 +5,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const { resetToken } = useParams(); // Get token from URL
+  const { resetToken } = useParams(); 
   const navigate = useNavigate();
+
+  // 🔥 USE YOUR RENDER BACKEND URL HERE
+  const API_URL = 'https://office-vault-app.onrender.com/api/auth';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await axios.put(`/auth/resetpassword/${resetToken}`, { password });
+      // Updated to use Full URL
+      const { data } = await axios.put(`${API_URL}/resetpassword/${resetToken}`, { password });
       setMessage('Password Reset Successful! Redirecting...');
       setTimeout(() => navigate('/'), 2000);
     } catch (error) {

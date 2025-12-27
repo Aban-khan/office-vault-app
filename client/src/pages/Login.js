@@ -19,35 +19,42 @@ const Login = () => {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
+  // --- USE YOUR RENDER BACKEND URL HERE ---
+  const API_URL = 'https://office-vault-app.onrender.com/api/auth';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
 
     try {
       if (view === 'login') {
-        const { data } = await axios.post('/auth/login', { email, password });
+        // Updated to use Full URL
+        const { data } = await axios.post(`${API_URL}/login`, { email, password });
         localStorage.setItem('userInfo', JSON.stringify(data));
         navigate('/dashboard');
       } 
       else if (view === 'signup') {
-        await axios.post('/auth/register', { name, email, password, phoneNumber });
+        // Updated to use Full URL
+        await axios.post(`${API_URL}/register`, { name, email, password, phoneNumber });
         setMessage('Signup successful! Wait for approval.');
         setView('login');
       } 
       else if (view === 'forgot-email') {
         // Step 1: Send Email -> Backend looks up Phone -> Sends OTP
-        const { data } = await axios.post('/auth/forgot-otp', { email });
+        const { data } = await axios.post(`${API_URL}/forgot-otp`, { email });
         setMessage(data.message); // e.g. "OTP sent to phone ending in 9999"
         setView('forgot-otp');
       }
       else if (view === 'forgot-otp') {
         // Step 2: Verify OTP using Email to identify user
-        await axios.post('/auth/reset-otp', { email, otp, newPassword });
+        await axios.post(`${API_URL}/reset-otp`, { email, otp, newPassword });
         setMessage('Password Changed Successfully! Please Login.');
         setView('login');
       }
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Something went wrong');
+      // Improved error handling to see what is wrong
+      console.error("Login Error:", error); 
+      setMessage(error.response?.data?.message || 'Connection Failed. Check Internet or Backend.');
     }
   };
 
@@ -68,7 +75,7 @@ const Login = () => {
           {view === 'signup' && (
             <>
               <div><label className="text-sm font-bold text-gray-700">Name</label><input type="text" className="w-full p-2 border rounded" value={name} onChange={e=>setName(e.target.value)} required /></div>
-              <div><label className="text-sm font-bold text-gray-700">Phone Number (For Recovery)</label><input type="text" placeholder="e.g. 9876543210" className="w-full p-2 border rounded" value={phoneNumber} onChange={e=>setPhoneNumber(e.target.value)} required /></div>
+              <div><label className="text-sm font-bold text-gray-700">Phone Number (For Recovery)</label><input type="text" placeholder="e.g. +919876543210" className="w-full p-2 border rounded" value={phoneNumber} onChange={e=>setPhoneNumber(e.target.value)} required /></div>
             </>
           )}
 

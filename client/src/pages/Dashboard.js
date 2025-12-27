@@ -42,15 +42,15 @@ const Dashboard = () => {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       
-      const reqTasks = axios.get('/api/tasks', config);
-      const reqProjects = axios.get('/api/projects', config);
+      const reqTasks = axios.get('/tasks', config);
+      const reqProjects = axios.get('/projects', config);
       
       let reqUsers = Promise.resolve({ data: [] });
       let reqPending = Promise.resolve({ data: [] });
 
       if (userInfo.role === 'admin') {
-          reqUsers = axios.get('/api/users', config); 
-          reqPending = axios.get('/api/auth/pending', config); 
+          reqUsers = axios.get('/users', config); 
+          reqPending = axios.get('/auth/pending', config); 
       }
 
       const [resTasks, resProjects, resUsers, resPending] = await Promise.all([
@@ -86,7 +86,7 @@ const Dashboard = () => {
       formData.append('assignedTo', assignedTo);
       if (taskFile) formData.append('file', taskFile);
       
-      const { data } = await axios.post('/api/tasks', formData, config);
+      const { data } = await axios.post('/tasks', formData, config);
       setTasks([...tasks, data]);
       
       // Reset Form
@@ -104,7 +104,7 @@ const Dashboard = () => {
   const handleApproveUser = async (id) => {
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        await axios.put(`/api/auth/approve/${id}`, {}, config);
+        await axios.put(`/auth/approve/${id}`, {}, config);
         alert('User Approved!');
         fetchData(currentUser.token); 
     } catch (error) {
@@ -116,7 +116,7 @@ const Dashboard = () => {
     if(!window.confirm("Reject and delete this user request?")) return;
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        await axios.delete(`/api/auth/reject/${id}`, config);
+        await axios.delete(`/auth/reject/${id}`, config);
         fetchData(currentUser.token);
     } catch (error) {
         alert('Error rejecting user');
@@ -134,7 +134,7 @@ const Dashboard = () => {
       for (let i = 0; i < projFiles.length; i++) {
         formData.append('files', projFiles[i]);
       }
-      const { data } = await axios.post('/api/projects', formData, config);
+      const { data } = await axios.post('/projects', formData, config);
       setProjects([data, ...projects]); 
       setProjTitle(''); setProjDesc(''); setProjFiles([]); 
       document.getElementById('project-file-input').value = ""; 
@@ -153,7 +153,7 @@ const Dashboard = () => {
     }
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      const { data } = await axios.put(`/api/projects/${projectId}/add`, formData, config);
+      const { data } = await axios.put(`/projects/${projectId}/add`, formData, config);
       setProjects(projects.map(p => p._id === projectId ? data : p));
       alert('File added successfully!');
     } catch (error) {
@@ -165,7 +165,7 @@ const Dashboard = () => {
     if(!window.confirm("Delete this specific file?")) return;
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        const { data } = await axios.put(`/api/projects/${projectId}/remove-file`, { filePath }, config);
+        const { data } = await axios.put(`/projects/${projectId}/remove-file`, { filePath }, config);
         setProjects(projects.map(p => p._id === projectId ? data : p));
     } catch (error) {
         alert('Failed to delete file');
@@ -176,7 +176,7 @@ const Dashboard = () => {
     setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      await axios.put(`/api/tasks/${taskId}`, { status: newStatus }, config);
+      await axios.put(`/tasks/${taskId}`, { status: newStatus }, config);
     } catch (error) {
       fetchData(currentUser.token);
     }
@@ -187,7 +187,7 @@ const Dashboard = () => {
     if (!message) return alert("Please type a message first");
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      const { data } = await axios.put(`/api/tasks/${taskId}`, { employeeReply: message }, config);
+      const { data } = await axios.put(`/tasks/${taskId}`, { employeeReply: message }, config);
       setTasks(tasks.map(t => t._id === taskId ? data : t));
       setReplyTexts({ ...replyTexts, [taskId]: '' });
       alert("Reply Sent to Admin!");
@@ -201,7 +201,7 @@ const Dashboard = () => {
     if(!window.confirm("Delete this task?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      await axios.delete(`/api/tasks/${id}`, config);
+      await axios.delete(`/tasks/${id}`, config);
       setTasks(tasks.filter(t => t._id !== id)); 
     } catch (error) {
       alert('Error deleting task');
@@ -212,7 +212,7 @@ const Dashboard = () => {
     if(!window.confirm("Delete this ENTIRE project?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      await axios.delete(`/api/projects/${id}`, config);
+      await axios.delete(`/projects/${id}`, config);
       setProjects(projects.filter(p => p._id !== id)); 
     } catch (error) {
       alert('Error deleting project');
@@ -331,7 +331,7 @@ const Dashboard = () => {
                     <div>
                       <h3 className="font-bold mr-6">{task.title}</h3>
                       <p className="text-sm text-gray-600">{task.description}</p>
-                      {task.file && <a href={`http://localhost:5000/${task.file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="text-blue-600 text-sm block mt-1">📎 Attachment</a>}
+                      {task.file && <a href={`https://office-vault-app.onrender.com/api/${task.file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="text-blue-600 text-sm block mt-1">📎 Attachment</a>}
                     </div>
                     
                     <div className="mt-4">
@@ -408,13 +408,13 @@ const Dashboard = () => {
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', width: '100%' }}>
                             {proj.files && proj.files.map((file, index) => (
                                 <div key={index} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #795548', borderRadius: '50px', padding: '0 5px 0 12px', background: '#FFF8E7', fontSize: '0.85rem', gap: '8px' }}>
-                                    <a href={`http://localhost:5000/${file.replace('\\','/')}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#795548', fontWeight: 'bold' }} title={getFileName(file)}>📄 {getFileName(file)}</a>
+                                    <a href={`https://office-vault-app.onrender.com/api/${file.replace('\\','/')}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#795548', fontWeight: 'bold' }} title={getFileName(file)}>📄 {getFileName(file)}</a>
                                     {isAdmin && (<button onClick={() => handleDeleteFile(proj._id, file)} style={{ background: 'none', border: 'none', color: '#D32F2F', cursor: 'pointer', fontSize: '14px', padding: '4px 8px', borderLeft: '1px solid #D7CCC8' }} title="Delete this file">✖</button>)}
                                 </div>
                             ))}
                             {!proj.files && proj.file && (
                                 <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #795548', borderRadius: '50px', padding: '0 5px 0 12px', background: '#FFF8E7' }}>
-                                    <a href={`http://localhost:5000/${proj.file.replace('\\','/')}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#795548', fontWeight: 'bold', marginRight: '8px' }}>📄 {getFileName(proj.file)}</a>
+                                    <a href={`https://office-vault-app.onrender.com/api/${proj.file.replace('\\','/')}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#795548', fontWeight: 'bold', marginRight: '8px' }}>📄 {getFileName(proj.file)}</a>
                                 </div>
                             )}
                             <label htmlFor={`upload-${proj._id}`} className="view-file-btn" style={{ cursor: 'pointer', borderStyle: 'dashed', backgroundColor: '#fff', color: '#795548' }}>➕ Add File</label>

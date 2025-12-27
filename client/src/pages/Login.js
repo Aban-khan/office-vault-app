@@ -25,24 +25,24 @@ const Login = () => {
 
     try {
       if (view === 'login') {
-        const { data } = await axios.post('/api/auth/login', { email, password });
+        const { data } = await axios.post('/auth/login', { email, password });
         localStorage.setItem('userInfo', JSON.stringify(data));
         navigate('/dashboard');
       } 
       else if (view === 'signup') {
-        await axios.post('/api/auth/register', { name, email, password, phoneNumber });
+        await axios.post('/auth/register', { name, email, password, phoneNumber });
         setMessage('Signup successful! Wait for approval.');
         setView('login');
       } 
       else if (view === 'forgot-email') {
         // Step 1: Send Email -> Backend looks up Phone -> Sends OTP
-        const { data } = await axios.post('/api/auth/forgot-otp', { email });
+        const { data } = await axios.post('/auth/forgot-otp', { email });
         setMessage(data.message); // e.g. "OTP sent to phone ending in 9999"
         setView('forgot-otp');
       }
       else if (view === 'forgot-otp') {
         // Step 2: Verify OTP using Email to identify user
-        await axios.post('/api/auth/reset-otp', { email, otp, newPassword });
+        await axios.post('/auth/reset-otp', { email, otp, newPassword });
         setMessage('Password Changed Successfully! Please Login.');
         setView('login');
       }

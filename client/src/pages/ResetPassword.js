@@ -11,7 +11,7 @@ const ResetPassword = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await axios.put(`/api/auth/resetpassword/${resetToken}`, { password });
+      const { data } = await axios.put(`/auth/resetpassword/${resetToken}`, { password });
       setMessage('Password Reset Successful! Redirecting...');
       setTimeout(() => navigate('/'), 2000);
     } catch (error) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import toast from 'react-hot-toast'; // <--- IMPORT POPUPS
+import toast from 'react-hot-toast';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -37,7 +37,6 @@ const Dashboard = () => {
       setCurrentUser(userInfo);
       fetchData(userInfo.token);
       
-      // 🔔 ASK FOR NOTIFICATION PERMISSION ON LOAD
       if (Notification.permission !== 'granted') {
         Notification.requestPermission();
       }
@@ -64,7 +63,6 @@ const Dashboard = () => {
         reqTasks, reqProjects, reqUsers, reqPending
       ]);
 
-      // 🔔 NOTIFICATION LOGIC: Check if new tasks arrived
       if (resTasks.data.length > tasks.length && tasks.length > 0) {
         new Notification("Highrise Vault", { 
            body: "You have a new task assigned!", 
@@ -92,7 +90,7 @@ const Dashboard = () => {
     if (!taskTitle) return toast.error('Task Title is required');
     if (!assignedTo) return toast.error('Please select an employee'); 
 
-    const loadToast = toast.loading('Assigning Task...'); // Show loading spinner
+    const loadToast = toast.loading('Assigning Task...');
 
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
@@ -269,59 +267,62 @@ const Dashboard = () => {
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="p-4 text-white bg-blue-600 shadow-md">
+    // ✨ UPDATED BACKGROUND: Warm Earthy Beige
+    <div className="min-h-screen bg-[#EFEBE9]">
+      
+      {/* 🏢 NAVBAR: Dark Coffee Brown */}
+      <nav className="p-4 text-white bg-[#3E2723] shadow-md">
         <div className="container flex justify-between items-center mx-auto">
-          <h1 className="text-xl font-bold">Office Vault</h1>
+          <h1 className="text-xl font-bold font-serif tracking-wide">Highrise Vault</h1>
           <div className="flex items-center gap-4">
-            <span className="font-semibold">{isAdmin ? '👑 Admin: ' : '👤 Staff: '} {currentUser?.name}</span>
-            <button onClick={handleLogout} className="px-3 py-1 text-sm bg-red-500 rounded hover:bg-red-600">Logout</button>
+            <span className="font-semibold text-[#D7CCC8]">{isAdmin ? '👑 Admin: ' : '👤 Staff: '} {currentUser?.name}</span>
+            <button onClick={handleLogout} className="px-3 py-1 text-sm bg-[#B71C1C] rounded hover:bg-[#C62828] transition-colors border border-[#D32F2F]">Logout</button>
           </div>
         </div>
       </nav>
 
       <div className="container p-6 mx-auto">
-        <div className="flex mb-6 border-b-2 border-gray-300">
-          <button className={`px-6 py-2 font-bold ${activeTab === 'tasks' ? 'text-blue-600 border-b-4 border-blue-600' : 'text-gray-500'}`} onClick={() => setActiveTab('tasks')}>📋 Tasks</button>
-          <button className={`px-6 py-2 font-bold ${activeTab === 'projects' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500'}`} onClick={() => setActiveTab('projects')}>🚀 Projects</button>
+        <div className="flex mb-6 border-b-2 border-[#D7CCC8]">
+          <button className={`px-6 py-2 font-bold ${activeTab === 'tasks' ? 'text-[#3E2723] border-b-4 border-[#3E2723]' : 'text-[#8D6E63]'}`} onClick={() => setActiveTab('tasks')}>📋 Tasks</button>
+          <button className={`px-6 py-2 font-bold ${activeTab === 'projects' ? 'text-[#BF360C] border-b-4 border-[#BF360C]' : 'text-[#8D6E63]'}`} onClick={() => setActiveTab('projects')}>🚀 Projects</button>
         </div>
 
         {activeTab === 'tasks' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {isAdmin && (
               <div className="space-y-6 lg:col-span-1">
-                <div className="p-6 bg-white rounded shadow-md">
-                  <h3 className="mb-4 text-lg font-bold text-gray-700">Assign New Task</h3>
+                <div className="p-6 bg-[#FFF8E7] rounded shadow-md border border-[#D7CCC8]">
+                  <h3 className="mb-4 text-lg font-bold text-[#3E2723]">Assign New Task</h3>
                   <form onSubmit={handleCreateTask} className="flex flex-col gap-3">
-                    <input type="text" placeholder="Title" className="p-2 border rounded" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
-                    <input type="text" placeholder="Description" className="p-2 border rounded" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="p-2 border rounded">
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
+                    <input type="text" placeholder="Title" className="p-2 border border-[#A1887F] rounded bg-white" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+                    <input type="text" placeholder="Description" className="p-2 border border-[#A1887F] rounded bg-white" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
+                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-white text-[#3E2723]">
+                        <option value="Low">Low Priority</option>
+                        <option value="Medium">Medium Priority</option>
+                        <option value="High">High Priority</option>
                     </select>
-                    <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2 border rounded bg-gray-50">
+                    <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-[#EFEBE9] font-bold text-[#3E2723]">
                         <option value="">-- Select Employee --</option>
                         <option value="all">📢 ALL EMPLOYEES</option> 
                         {employees.map(e => (<option key={e._id} value={e._id}>{e.name}</option>))}
                     </select>
-                    <input type="file" className="text-sm" onChange={(e) => setTaskFile(e.target.files[0])} />
-                    <button className="py-2 text-white bg-green-600 rounded">Create Task</button>
+                    <input type="file" className="text-sm text-[#5D4037]" onChange={(e) => setTaskFile(e.target.files[0])} />
+                    <button className="py-2 text-white bg-[#33691E] rounded hover:bg-[#558B2F] font-bold shadow-sm">Create Task</button>
                   </form>
                 </div>
 
-                <div className="p-6 mt-6 bg-white rounded shadow-md border-t-4 border-orange-500">
-                  <h3 className="mb-4 text-lg font-bold text-gray-700">🔔 Pending Requests</h3>
+                <div className="p-6 mt-6 bg-[#FFF8E7] rounded shadow-md border-t-4 border-[#BF360C]">
+                  <h3 className="mb-4 text-lg font-bold text-[#3E2723]">🔔 Pending Requests</h3>
                   {pendingUsers.length === 0 ? (
-                      <p className="text-sm text-gray-500">No new signups.</p>
+                      <p className="text-sm text-[#8D6E63]">No new signups.</p>
                   ) : (
                       <ul className="space-y-3">
                           {pendingUsers.map(user => (
-                              <li key={user._id} className="flex justify-between items-center bg-gray-50 p-2 rounded border">
-                                  <div><p className="text-sm font-bold">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div>
+                              <li key={user._id} className="flex justify-between items-center bg-[#EFEBE9] p-2 rounded border border-[#D7CCC8]">
+                                  <div><p className="text-sm font-bold text-[#3E2723]">{user.name}</p><p className="text-xs text-[#5D4037]">{user.email}</p></div>
                                   <div className="flex gap-2">
-                                      <button onClick={() => handleApproveUser(user._id)} className="text-green-600 font-bold text-lg" title="Approve">✅</button>
-                                      <button onClick={() => handleRejectUser(user._id)} className="text-red-600 font-bold text-lg" title="Reject">❌</button>
+                                      <button onClick={() => handleApproveUser(user._id)} className="text-[#2E7D32] font-bold text-lg" title="Approve">✅</button>
+                                      <button onClick={() => handleRejectUser(user._id)} className="text-[#C62828] font-bold text-lg" title="Reject">❌</button>
                                   </div>
                               </li>
                           ))}
@@ -332,31 +333,31 @@ const Dashboard = () => {
             )}
             
             <div className={isAdmin ? "lg:col-span-2" : "lg:col-span-3"}>
-              <h2 className="mb-6 text-2xl font-bold text-gray-800">Task Board</h2>
+              <h2 className="mb-6 text-2xl font-bold text-[#3E2723] font-serif">Task Board</h2>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {tasks.map(task => (
-                  <div key={task._id} className="relative p-4 bg-white border rounded shadow flex flex-col justify-between">
-                    <div className={`absolute top-0 left-0 w-1 h-full rounded-l ${task.status === 'Completed' ? 'bg-green-500' : task.status === 'In Progress' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-                    {isAdmin && (<button onClick={() => handleDeleteTask(task._id)} className="absolute top-2 right-2 text-gray-400 hover:text-red-600 font-bold" title="Delete Task">🗑️</button>)}
+                  <div key={task._id} className="relative p-4 bg-[#FFF8E7] border border-[#D7CCC8] rounded shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                    <div className={`absolute top-0 left-0 w-1 h-full rounded-l ${task.status === 'Completed' ? 'bg-[#33691E]' : task.status === 'In Progress' ? 'bg-[#F57F17]' : 'bg-[#D32F2F]'}`}></div>
+                    {isAdmin && (<button onClick={() => handleDeleteTask(task._id)} className="absolute top-2 right-2 text-[#A1887F] hover:text-[#D32F2F] font-bold" title="Delete Task">🗑️</button>)}
                     <div>
-                      <h3 className="font-bold mr-6">{task.title}</h3>
-                      <p className="text-sm text-gray-600">{task.description}</p>
-                      {task.file && <a href={`${API_BASE}/${task.file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="text-blue-600 text-sm block mt-1">📎 Attachment</a>}
+                      <h3 className="font-bold mr-6 text-[#3E2723]">{task.title}</h3>
+                      <p className="text-sm text-[#5D4037]">{task.description}</p>
+                      {task.file && <a href={`${API_BASE}/${task.file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="text-[#1565C0] text-sm block mt-1 hover:underline">📎 Attachment</a>}
                     </div>
                     <div className="mt-4">
-                      <div className="text-xs mb-2"><span className="font-bold text-gray-400">ASSIGNED TO:</span> <span className="text-blue-600">{task.assignedTo?.name}</span></div>
+                      <div className="text-xs mb-2"><span className="font-bold text-[#8D6E63]">ASSIGNED TO:</span> <span className="text-[#3E2723] font-bold">{task.assignedTo?.name}</span></div>
                       {isAdmin ? (
-                          <div className={`w-full p-2 text-center rounded text-sm font-bold border ${task.status === 'Completed' ? 'bg-green-100 text-green-700 border-green-200' : task.status === 'In Progress' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 'bg-red-100 text-red-700 border-red-200'}`}>Status: {task.status || 'Pending'}</div>
+                          <div className={`w-full p-2 text-center rounded text-sm font-bold border ${task.status === 'Completed' ? 'bg-[#DCEDC8] text-[#33691E] border-[#C5E1A5]' : task.status === 'In Progress' ? 'bg-[#FFF9C4] text-[#F57F17] border-[#FFF59D]' : 'bg-[#FFCDD2] text-[#B71C1C] border-[#EF9A9A]'}`}>Status: {task.status || 'Pending'}</div>
                       ) : (
-                        <select value={task.status||'Pending'} onChange={(e)=>handleStatusChange(task._id, e.target.value)} className="w-full text-sm border rounded p-1 font-bold bg-white"><option>Pending</option><option>In Progress</option><option>Completed</option></select>
+                        <select value={task.status||'Pending'} onChange={(e)=>handleStatusChange(task._id, e.target.value)} className="w-full text-sm border border-[#A1887F] rounded p-1 font-bold bg-white text-[#3E2723]"><option>Pending</option><option>In Progress</option><option>Completed</option></select>
                       )}
-                      <div className="mt-3 border-t pt-2">
-                        {isAdmin && (<div className="bg-gray-50 p-2 rounded border"><span className="text-xs font-bold text-gray-500 block">Message from Staff:</span><p className="text-sm text-gray-800 italic">{task.employeeReply || "No message."}</p></div>)}
+                      <div className="mt-3 border-t border-[#D7CCC8] pt-2">
+                        {isAdmin && (<div className="bg-[#EFEBE9] p-2 rounded border border-[#D7CCC8]"><span className="text-xs font-bold text-[#5D4037] block">Message from Staff:</span><p className="text-sm text-[#3E2723] italic">{task.employeeReply || "No message."}</p></div>)}
                         {!isAdmin && (
                             <div className="flex flex-col gap-2">
-                                <label className="text-xs font-bold text-gray-500">Message to Admin:</label>
-                                <textarea className="w-full p-2 border rounded text-sm" rows="2" placeholder="Type update here..." value={replyTexts[task._id] || ''} onChange={(e) => setReplyTexts({ ...replyTexts, [task._id]: e.target.value })} />
-                                <button onClick={() => handleSendReply(task._id)} className="self-end bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">Send Msg</button>
+                                <label className="text-xs font-bold text-[#5D4037]">Message to Admin:</label>
+                                <textarea className="w-full p-2 border border-[#A1887F] rounded text-sm bg-white" rows="2" placeholder="Type update here..." value={replyTexts[task._id] || ''} onChange={(e) => setReplyTexts({ ...replyTexts, [task._id]: e.target.value })} />
+                                <button onClick={() => handleSendReply(task._id)} className="self-end bg-[#5D4037] text-white text-xs px-3 py-1 rounded hover:bg-[#4E342E]">Send Msg</button>
                             </div>
                         )}
                       </div>
@@ -368,48 +369,47 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* PROJECTS TAB (Kept same logic, just replaced alerts with toast) */}
         {activeTab === 'projects' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1">
-              <div className="p-6 bg-white rounded shadow-md border-t-4 border-purple-600">
-                <h3 className="mb-4 text-lg font-bold text-gray-700">🚀 Submit New Project</h3>
+              <div className="p-6 bg-[#FFF8E7] rounded shadow-md border-t-4 border-[#BF360C]">
+                <h3 className="mb-4 text-lg font-bold text-[#3E2723]">🚀 Submit New Project</h3>
                 <form onSubmit={handleCreateProject} className="flex flex-col gap-3">
-                  <label className="text-xs font-bold text-gray-500">Project Name</label>
-                  <input type="text" placeholder="e.g. Q1 Marketing Plan" className="p-2 border rounded" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
-                  <label className="text-xs font-bold text-gray-500">Details</label>
-                  <textarea rows="3" placeholder="Description..." className="p-2 border rounded" value={projDesc} onChange={(e) => setProjDesc(e.target.value)} />
-                  <label className="text-xs font-bold text-gray-500">Initial Files</label>
-                  <input id="project-file-input" type="file" className="text-sm" multiple onChange={handleFileSelect} />
-                  <button className="py-2 mt-2 text-white bg-purple-600 rounded hover:bg-purple-700">Submit Project</button>
+                  <label className="text-xs font-bold text-[#5D4037]">Project Name</label>
+                  <input type="text" placeholder="e.g. Q1 Marketing Plan" className="p-2 border border-[#A1887F] rounded bg-white" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
+                  <label className="text-xs font-bold text-[#5D4037]">Details</label>
+                  <textarea rows="3" placeholder="Description..." className="p-2 border border-[#A1887F] rounded bg-white" value={projDesc} onChange={(e) => setProjDesc(e.target.value)} />
+                  <label className="text-xs font-bold text-[#5D4037]">Initial Files</label>
+                  <input id="project-file-input" type="file" className="text-sm text-[#5D4037]" multiple onChange={handleFileSelect} />
+                  <button className="py-2 mt-2 text-white bg-[#BF360C] rounded hover:bg-[#D84315] font-bold">Submit Project</button>
                 </form>
               </div>
             </div>
             <div className="lg:col-span-2">
-              <h2 className="mb-6 text-2xl font-bold text-gray-800">Project Submissions</h2>
+              <h2 className="mb-6 text-2xl font-bold text-[#3E2723] font-serif">Project Submissions</h2>
               <div className="project-list-container">
                 {projects.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#8d6e63', marginTop: '20px' }}>No projects uploaded yet.</p>
+                    <p style={{ textAlign: 'center', color: '#8D6E63', marginTop: '20px' }}>No projects uploaded yet.</p>
                 ) : (
                     projects.map(proj => (
-                    <div key={proj._id} className="project-card">
-                        <div className="project-header">
-                          <h3 className="project-title">{proj.title}</h3>
-                          {isAdmin && (<button className="delete-btn-icon" onClick={() => handleDeleteProject(proj._id)} title="Delete Project">❌</button>)}
+                    <div key={proj._id} className="p-4 mb-4 bg-[#FFF8E7] border border-[#D7CCC8] rounded shadow-sm">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-bold text-lg text-[#3E2723]">{proj.title}</h3>
+                          {isAdmin && (<button className="text-[#A1887F] hover:text-[#D32F2F] font-bold" onClick={() => handleDeleteProject(proj._id)} title="Delete Project">❌</button>)}
                         </div>
-                        <div className="project-body"><p className="project-desc">{proj.description || "No description provided."}</p></div>
-                        <div className="project-footer" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', width: '100%' }}>
+                        <div className="mb-4"><p className="text-sm text-[#5D4037]">{proj.description || "No description provided."}</p></div>
+                        <div className="flex flex-col gap-4">
+                          <div className="flex flex-wrap gap-2">
                             {proj.files && proj.files.map((file, index) => (
-                                <div key={index} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #795548', borderRadius: '50px', padding: '0 5px 0 12px', background: '#FFF8E7', fontSize: '0.85rem', gap: '8px' }}>
-                                    <a href={`${API_BASE}/${file.replace('\\','/')}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#795548', fontWeight: 'bold' }} title={getFileName(file)}>📄 {getFileName(file)}</a>
-                                    {isAdmin && (<button onClick={() => handleDeleteFile(proj._id, file)} style={{ background: 'none', border: 'none', color: '#D32F2F', cursor: 'pointer', fontSize: '14px', padding: '4px 8px', borderLeft: '1px solid #D7CCC8' }} title="Delete this file">✖</button>)}
+                                <div key={index} className="flex items-center gap-2 border border-[#A1887F] rounded-full px-3 py-1 bg-[#EFEBE9] text-sm">
+                                    <a href={`${API_BASE}/${file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="no-underline text-[#3E2723] font-bold hover:text-[#BF360C]" title={getFileName(file)}>📄 {getFileName(file)}</a>
+                                    {isAdmin && (<button onClick={() => handleDeleteFile(proj._id, file)} className="text-[#C62828] font-bold hover:text-[#D32F2F] border-l border-[#D7CCC8] pl-2">✖</button>)}
                                 </div>
                             ))}
-                            <label htmlFor={`upload-${proj._id}`} className="view-file-btn" style={{ cursor: 'pointer', borderStyle: 'dashed', backgroundColor: '#fff', color: '#795548' }}>➕ Add File</label>
+                            <label htmlFor={`upload-${proj._id}`} className="cursor-pointer border-dashed border-2 border-[#A1887F] bg-white text-[#5D4037] px-3 py-1 rounded-full text-sm font-bold hover:bg-[#EFEBE9]">➕ Add File</label>
                             <input id={`upload-${proj._id}`} type="file" multiple style={{ display: 'none' }} onChange={(e) => handleAddFileToProject(proj._id, e)} />
                           </div>
-                          <div className="submitted-info" style={{ width: '100%', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                          <div className="w-full border-t border-[#D7CCC8] pt-2 text-xs text-[#8D6E63]">
                               <strong>Submitted by:</strong> {proj.createdBy?.name || "Unknown"} 
                               <span style={{float:'right'}}>{new Date(proj.createdAt).toLocaleDateString()}</span>
                           </div>

@@ -1,20 +1,31 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast'; // <--- 1. Import this
+
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard'; // <--- 1. Import the Dashboard
-import './App.css';
+import Dashboard from './pages/Dashboard';
 import ResetPassword from './pages/ResetPassword';
+
 function App() {
   return (
-    <Router>
+    <BrowserRouter>
+      {/* 2. Add the Toaster here. This controls how the popups look. */}
+      <Toaster 
+        position="top-center" 
+        toastOptions={{
+          style: {
+            background: '#333',
+            color: '#fff',
+            zIndex: 9999,
+          },
+        }} 
+      />
+      
       <Routes>
-        {/* Home page is Login */}
         <Route path="/" element={<Login />} />
-        
-        {/* 2. Add the Dashboard Route */}
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/resetpassword/:resetToken" element={<ResetPassword />} />
+        <Route path="/reset-password/:resetToken" element={<ResetPassword />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast'; // <--- IMPORT POPUPS
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -26,7 +27,6 @@ const Dashboard = () => {
 
   const [replyTexts, setReplyTexts] = useState({});
 
-  // --- 🔥 VITAL: THE BACKEND URL ---
   const API_BASE = 'https://office-vault-app.onrender.com/api';
 
   useEffect(() => {
@@ -36,6 +36,11 @@ const Dashboard = () => {
     } else {
       setCurrentUser(userInfo);
       fetchData(userInfo.token);
+      
+      // 🔔 ASK FOR NOTIFICATION PERMISSION ON LOAD
+      if (Notification.permission !== 'granted') {
+        Notification.requestPermission();
+      }
     }
   }, [navigate]);
 
@@ -59,6 +64,15 @@ const Dashboard = () => {
         reqTasks, reqProjects, reqUsers, reqPending
       ]);
 
+      // 🔔 NOTIFICATION LOGIC: Check if new tasks arrived
+      if (resTasks.data.length > tasks.length && tasks.length > 0) {
+        new Notification("Highrise Vault", { 
+           body: "You have a new task assigned!", 
+           icon: "/logo192.png" 
+        });
+        toast("New Task Received!", { icon: '🔔' });
+      }
+
       setTasks(resTasks.data);
       setProjects(resProjects.data);
       if (userInfo.role === 'admin') {
@@ -67,6 +81,7 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching data', error);
+      toast.error("Failed to load data");
     }
   };
 
@@ -74,8 +89,10 @@ const Dashboard = () => {
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!taskTitle) return alert('Title required');
-    if (!assignedTo) return alert('Please select an employee'); 
+    if (!taskTitle) return toast.error('Task Title is required');
+    if (!assignedTo) return toast.error('Please select an employee'); 
+
+    const loadToast = toast.loading('Assigning Task...'); // Show loading spinner
 
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
@@ -86,28 +103,21 @@ const Dashboard = () => {
       formData.append('assignedTo', assignedTo);
       if (taskFile) formData.append('file', taskFile);
       
-      // Send Request
       const { data } = await axios.post(`${API_BASE}/tasks`, formData, config);
       
-      // --- 🔥 UPDATED LOGIC FOR "ALL EMPLOYEES" ---
       if (assignedTo === 'all') {
-          alert('Task Assigned to Everyone! 📢');
-          // Reload data so the admin sees all the new tasks created
+          toast.success('Task Assigned to Everyone! 📢', { id: loadToast });
           fetchData(currentUser.token); 
       } else {
-          // Normal single task add
           setTasks([...tasks, data]);
-          alert('Task Assigned!');
+          toast.success('Task Assigned Successfully!', { id: loadToast });
       }
 
-      // Reset Form
-      setTaskTitle(''); 
-      setTaskDesc(''); 
-      setTaskFile(null); 
-      setAssignedTo(''); 
+      setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); 
 
     } catch (error) {
-      alert('Error creating task');
+      console.error(error);
+      toast.error('Failed to create task', { id: loadToast });
     }
   };
 
@@ -115,10 +125,10 @@ const Dashboard = () => {
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
         await axios.put(`${API_BASE}/auth/approve/${id}`, {}, config);
-        alert('User Approved!');
+        toast.success('User Approved!');
         fetchData(currentUser.token); 
     } catch (error) {
-        alert('Error approving user');
+        toast.error('Error approving user');
     }
   };
 
@@ -127,15 +137,18 @@ const Dashboard = () => {
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
         await axios.delete(`${API_BASE}/auth/reject/${id}`, config);
+        toast.success('User Rejected');
         fetchData(currentUser.token);
     } catch (error) {
-        alert('Error rejecting user');
+        toast.error('Error rejecting user');
     }
   };
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    if (!projTitle || projFiles.length === 0) return alert('Title and at least one File are required');
+    if (!projTitle || projFiles.length === 0) return toast.error('Title and 1 File required');
+    
+    const loadToast = toast.loading('Uploading Project...');
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       const formData = new FormData();
@@ -148,15 +161,17 @@ const Dashboard = () => {
       setProjects([data, ...projects]); 
       setProjTitle(''); setProjDesc(''); setProjFiles([]); 
       document.getElementById('project-file-input').value = ""; 
-      alert('Project Submitted!');
+      toast.success('Project Submitted!', { id: loadToast });
     } catch (error) {
-      alert('Error submitting project');
+      toast.error('Error submitting project', { id: loadToast });
     }
   };
 
   const handleAddFileToProject = async (projectId, e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const loadToast = toast.loading('Adding File...');
+    
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i]);
@@ -165,9 +180,9 @@ const Dashboard = () => {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       const { data } = await axios.put(`${API_BASE}/projects/${projectId}/add`, formData, config);
       setProjects(projects.map(p => p._id === projectId ? data : p));
-      alert('File added successfully!');
+      toast.success('File added!', { id: loadToast });
     } catch (error) {
-      alert('Error adding file');
+      toast.error('Error adding file', { id: loadToast });
     }
   };
 
@@ -177,13 +192,15 @@ const Dashboard = () => {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
         const { data } = await axios.put(`${API_BASE}/projects/${projectId}/remove-file`, { filePath }, config);
         setProjects(projects.map(p => p._id === projectId ? data : p));
+        toast.success('File deleted');
     } catch (error) {
-        alert('Failed to delete file');
+        toast.error('Failed to delete file');
     }
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
     setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
+    toast.success(`Status updated to ${newStatus}`);
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.put(`${API_BASE}/tasks/${taskId}`, { status: newStatus }, config);
@@ -194,16 +211,16 @@ const Dashboard = () => {
 
   const handleSendReply = async (taskId) => {
     const message = replyTexts[taskId];
-    if (!message) return alert("Please type a message first");
+    if (!message) return toast.error("Please type a message first");
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       const { data } = await axios.put(`${API_BASE}/tasks/${taskId}`, { employeeReply: message }, config);
       setTasks(tasks.map(t => t._id === taskId ? data : t));
       setReplyTexts({ ...replyTexts, [taskId]: '' });
-      alert("Reply Sent to Admin!");
+      toast.success("Reply Sent to Admin!");
     } catch (error) {
       console.error(error);
-      alert("Failed to send reply");
+      toast.error("Failed to send reply");
     }
   };
 
@@ -213,8 +230,9 @@ const Dashboard = () => {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.delete(`${API_BASE}/tasks/${id}`, config);
       setTasks(tasks.filter(t => t._id !== id)); 
+      toast.success('Task Deleted');
     } catch (error) {
-      alert('Error deleting task');
+      toast.error('Error deleting task');
     }
   };
 
@@ -224,14 +242,16 @@ const Dashboard = () => {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.delete(`${API_BASE}/projects/${id}`, config);
       setProjects(projects.filter(p => p._id !== id)); 
+      toast.success('Project Deleted');
     } catch (error) {
-      alert('Error deleting project');
+      toast.error('Error deleting project');
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('userInfo');
     navigate('/');
+    toast('Logged out successfully', { icon: '👋' });
   };
 
   const handleFileSelect = (e) => {
@@ -280,14 +300,11 @@ const Dashboard = () => {
                         <option value="Medium">Medium</option>
                         <option value="High">High</option>
                     </select>
-
-                    {/* 🔥 UPDATED DROPDOWN WITH ALL OPTION */}
                     <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2 border rounded bg-gray-50">
                         <option value="">-- Select Employee --</option>
                         <option value="all">📢 ALL EMPLOYEES</option> 
                         {employees.map(e => (<option key={e._id} value={e._id}>{e.name}</option>))}
                     </select>
-
                     <input type="file" className="text-sm" onChange={(e) => setTaskFile(e.target.files[0])} />
                     <button className="py-2 text-white bg-green-600 rounded">Create Task</button>
                   </form>
@@ -351,6 +368,7 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* PROJECTS TAB (Kept same logic, just replaced alerts with toast) */}
         {activeTab === 'projects' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1">

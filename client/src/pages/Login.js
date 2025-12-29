@@ -17,101 +17,109 @@ const Login = () => {
   const [newPassword, setNewPassword] = useState('');
 
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false); // Added Loading State
   const navigate = useNavigate();
 
-  // --- USE YOUR RENDER BACKEND URL HERE ---
+  // --- 🔥 VITAL: THE BACKEND URL ---
   const API_URL = 'https://office-vault-app.onrender.com/api/auth';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
+    setLoading(true);
 
     try {
       if (view === 'login') {
-        // Updated to use Full URL
         const { data } = await axios.post(`${API_URL}/login`, { email, password });
         localStorage.setItem('userInfo', JSON.stringify(data));
         navigate('/dashboard');
       } 
       else if (view === 'signup') {
-        // Updated to use Full URL
         await axios.post(`${API_URL}/register`, { name, email, password, phoneNumber });
         setMessage('Signup successful! Wait for approval.');
         setView('login');
       } 
       else if (view === 'forgot-email') {
-        // Step 1: Send Email -> Backend looks up Phone -> Sends OTP
         const { data } = await axios.post(`${API_URL}/forgot-otp`, { email });
-        setMessage(data.message); // e.g. "OTP sent to phone ending in 9999"
+        setMessage(data.message); 
         setView('forgot-otp');
       }
       else if (view === 'forgot-otp') {
-        // Step 2: Verify OTP using Email to identify user
         await axios.post(`${API_URL}/reset-otp`, { email, otp, newPassword });
         setMessage('Password Changed Successfully! Please Login.');
         setView('login');
       }
+      setLoading(false);
     } catch (error) {
-      // Improved error handling to see what is wrong
       console.error("Login Error:", error); 
       setMessage(error.response?.data?.message || 'Connection Failed. Check Internet or Backend.');
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 bg-white rounded shadow-md">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-          {view === 'login' && 'Login'}
-          {view === 'signup' && 'Create Account'}
+    // ✨ UPDATED BACKGROUND: Dark Gradient to make the card pop
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      
+      {/* Login Card with Cream Background */}
+      <div className="w-full max-w-md p-8 bg-[#FFF8E7] rounded-xl shadow-2xl border border-[#dcd6c8]">
+        
+        {/* 🏢 LOGO SECTION (Make sure logo192.png is in your public folder) */}
+        <div className="flex justify-center mb-6">
+            <img src="/logo192.png" alt="Logo" className="h-20 object-contain" />
+        </div>
+
+        <h2 className="text-3xl font-bold text-center text-gray-800 mb-6 font-serif">
+          {view === 'login' && 'Staff Login'}
+          {view === 'signup' && 'Join the Vault'}
           {view.includes('forgot') && 'Reset Password'}
         </h2>
         
-        {message && <div className={`p-3 mb-4 text-sm rounded ${message.includes('Success') || message.includes('sent') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{message}</div>}
+        {message && <div className={`p-3 mb-4 text-sm font-bold text-center rounded ${message.includes('Success') || message.includes('sent') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{message}</div>}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           
           {/* SIGNUP FIELDS */}
           {view === 'signup' && (
             <>
-              <div><label className="text-sm font-bold text-gray-700">Name</label><input type="text" className="w-full p-2 border rounded" value={name} onChange={e=>setName(e.target.value)} required /></div>
-              <div><label className="text-sm font-bold text-gray-700">Phone Number (For Recovery)</label><input type="text" placeholder="e.g. +919876543210" className="w-full p-2 border rounded" value={phoneNumber} onChange={e=>setPhoneNumber(e.target.value)} required /></div>
+              <div><label className="text-sm font-bold text-gray-700 uppercase">Full Name</label><input type="text" className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-brown-600" value={name} onChange={e=>setName(e.target.value)} required /></div>
+              <div><label className="text-sm font-bold text-gray-700 uppercase">Phone (For Recovery)</label><input type="text" placeholder="+91..." className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-brown-600" value={phoneNumber} onChange={e=>setPhoneNumber(e.target.value)} required /></div>
             </>
           )}
 
-          {/* EMAIL FIELD (Used in Login, Signup, and Forgot Password) */}
+          {/* EMAIL */}
           {(view === 'login' || view === 'signup' || view === 'forgot-email') && (
-             <div><label className="text-sm font-bold text-gray-700">Email Address</label><input type="email" className="w-full p-2 border rounded" value={email} onChange={e=>setEmail(e.target.value)} required /></div>
+             <div><label className="text-sm font-bold text-gray-700 uppercase">Email Address</label><input type="email" className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-brown-600" value={email} onChange={e=>setEmail(e.target.value)} required /></div>
           )}
 
-          {/* PASSWORD FIELD (Login/Signup) */}
+          {/* PASSWORD */}
           {(view === 'login' || view === 'signup') && (
-            <div><label className="text-sm font-bold text-gray-700">Password</label><input type="password" className="w-full p-2 border rounded" value={password} onChange={e=>setPassword(e.target.value)} required /></div>
+            <div><label className="text-sm font-bold text-gray-700 uppercase">Password</label><input type="password" className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-brown-600" value={password} onChange={e=>setPassword(e.target.value)} required /></div>
           )}
 
-          {/* FORGOT PASSWORD - STEP 2 (Enter OTP & New Pass) */}
+          {/* FORGOT PASS STEPS */}
           {view === 'forgot-otp' && (
             <>
-               <div className="p-2 bg-blue-50 text-blue-800 text-xs rounded mb-2">Check the phone number registered with <b>{email}</b> for the code.</div>
-               <div><label className="text-sm font-bold text-gray-700">Enter OTP Code</label><input type="text" className="w-full p-2 border rounded" value={otp} onChange={e=>setOtp(e.target.value)} required /></div>
-               <div><label className="text-sm font-bold text-gray-700">New Password</label><input type="password" className="w-full p-2 border rounded" value={newPassword} onChange={e=>setNewPassword(e.target.value)} required /></div>
+               <div className="p-2 bg-blue-50 text-blue-800 text-xs rounded mb-2">Code sent to phone linked with <b>{email}</b></div>
+               <div><label className="text-sm font-bold text-gray-700">Enter OTP</label><input type="text" className="w-full p-3 border rounded" value={otp} onChange={e=>setOtp(e.target.value)} required /></div>
+               <div><label className="text-sm font-bold text-gray-700">New Password</label><input type="password" className="w-full p-3 border rounded" value={newPassword} onChange={e=>setNewPassword(e.target.value)} required /></div>
             </>
           )}
 
-          <button type="submit" className="w-full py-2 font-bold text-white bg-blue-600 rounded hover:bg-blue-700">
-            {view === 'login' ? 'Login' : view === 'signup' ? 'Sign Up' : view === 'forgot-email' ? 'Send OTP to My Phone' : 'Reset Password'}
+          <button disabled={loading} type="submit" className="w-full py-3 text-lg font-bold text-white transition-all bg-stone-700 rounded hover:bg-stone-800 shadow-md">
+            {loading ? 'Processing...' : (view === 'login' ? 'Access Vault' : view === 'signup' ? 'Submit Request' : view === 'forgot-email' ? 'Send Code' : 'Update Password')}
           </button>
         </form>
 
-        <div className="mt-4 text-center text-sm space-y-2">
+        <div className="mt-6 text-center text-sm space-y-3">
             {view === 'login' && (
                 <>
-                    <p>Don't have an account? <button onClick={() => { setView('signup'); setMessage(''); }} className="text-blue-600 font-bold hover:underline">Sign Up</button></p>
-                    <button onClick={() => { setView('forgot-email'); setMessage(''); }} className="text-gray-500 hover:underline">Forgot Password?</button>
+                    <p className="text-gray-600">New Staff? <button onClick={() => { setView('signup'); setMessage(''); }} className="text-stone-700 font-bold hover:underline">Apply Here</button></p>
+                    <button onClick={() => { setView('forgot-email'); setMessage(''); }} className="text-gray-400 hover:text-stone-600 text-xs">Forgot Password?</button>
                 </>
             )}
             {view !== 'login' && (
-                <button onClick={() => { setView('login'); setMessage(''); }} className="text-blue-600 font-bold hover:underline">Back to Login</button>
+                <button onClick={() => { setView('login'); setMessage(''); }} className="text-stone-700 font-bold hover:underline">← Back to Login</button>
             )}
         </div>
       </div>

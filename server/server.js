@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
-const fs = require('fs'); // <--- IMPORT FS
+const fs = require('fs'); 
 const connectDB = require('./config/db');
 
 // --- IMPORTS ---
@@ -13,43 +13,56 @@ const projectRoutes = require('./routes/projectRoutes');
 
 // 1. Load config
 dotenv.config();
-
-// 2. Connect to Database
 connectDB();
 
 const app = express();
 
-// 3. Middlewares
-app.use(express.json()); // Allow JSON data
-app.use(cors()); // Allow frontend to talk to backend
+// 2. Middlewares
+app.use(express.json());
+app.use(cors());
 
-// 🔥 FIX: Allow images to be shown on Vercel (Cross-Origin)
+// 🔥 FIX 1: Allow images to load (Security Fix)
 app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
-// --- 🛡️ SAFETY CHECK: Create 'uploads' folder if missing ---
-// On Render, this folder gets deleted every deploy. We must recreate it.
-const uploadDir = path.join(__dirname, 'uploads');
+// 🔥 FIX 2: Safer Folder Path (using process.cwd)
+const uploadDir = path.join(process.cwd(), 'uploads');
+
+// 🔥 FIX 3: Re-create folder if Render deleted it
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
-    console.log('Created uploads folder');
+    console.log('✅ Created uploads folder at:', uploadDir);
 }
 
-// 🔥 SERVE IMAGES
-app.use('/api/uploads', express.static(uploadDir));
-
-// 4. Routes
-app.use('/api/auth', authRoutes);       // Login, Register
-app.use('/api/users', authRoutes);      // User List
-app.use('/api/tasks', taskRoutes);      // Tasks
-app.use('/api/projects', projectRoutes); // Projects
-
-app.get('/', (req, res) => {
-  res.send('API is running securely...');
+// 🔥 FIX 4: Debug Route (Check what files exist)
+app.get('/api/test-uploads', (req, res) => {
+    try {
+        const files = fs.readdirSync(uploadDir);
+        res.json({ 
+            status: 'Folder exists', 
+            path: uploadDir, 
+            files_count: files.length,
+            files: files 
+        });
+    } catch (error) {
+        res.json({ error: error.message });
+    }
 });
 
-// 5. Start Server
+// 🔥 FIX 5: Serve the files
+app.use('/api/uploads', express.static(uploadDir));
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', authRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/projects', projectRoutes);
+
+app.get('/', (req, res) => {
+  res.send('API is running...');
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

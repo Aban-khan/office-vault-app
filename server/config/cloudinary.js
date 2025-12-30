@@ -13,10 +13,20 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'highrise-vault', // The folder name in your Cloudinary account
-    allowed_formats: ['jpg', 'png', 'jpeg', 'pdf', 'doc', 'docx'],
-    resource_type: 'auto', // Auto-detects if it's an image or a PDF/Raw file
+  params: async (req, file) => {
+    return {
+      folder: 'highrise-vault',
+      resource_type: 'auto', // 🔥 CRITICAL: Fixes PDF opening issues
+      allowed_formats: ['jpg', 'png', 'jpeg', 'pdf', 'doc', 'docx', 'xlsx'],
+      
+      // 🔥 FIX NAME: Use the original filename
+      use_filename: true, 
+      unique_filename: false, // Warning: If 2 files have same name, one will be overwritten. Set true if you want random numbers.
+      overwrite: true,
+      
+      // Force the name to be the original name (minus extension)
+      public_id: file.originalname.replace(/\.[^/.]+$/, ""), 
+    };
   },
 });
 

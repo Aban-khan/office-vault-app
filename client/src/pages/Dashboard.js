@@ -78,19 +78,15 @@ const Dashboard = () => {
       ]);
 
       // 🔔 NOTIFICATION LOGIC
-      // If we have MORE tasks now than before, send a notification
       if (resTasks.data.length > prevTaskCount.current && prevTaskCount.current > 0) {
-        // Send Phone/Desktop Notification
         new Notification("Highrise Vault", { 
            body: "📢 New Task Assigned!", 
            icon: "/logo192.png",
            vibrate: [200, 100, 200]
         });
-        
         toast("New Task Received!", { icon: '🔔', duration: 5000 });
       }
 
-      // Update the reference tracker
       prevTaskCount.current = resTasks.data.length;
 
       setTasks(resTasks.data);
@@ -132,7 +128,6 @@ const Dashboard = () => {
           toast.success('Task Assigned Successfully!', { id: loadToast });
       }
       fetchData(currentUser.token); // Refresh immediately
-      // Reset Form
       setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); setSelectedProjectId('');
 
     } catch (error) {
@@ -181,7 +176,6 @@ const Dashboard = () => {
       }
       const { data } = await axios.post(`${API_BASE}/projects`, formData, config);
       setProjects([data, ...projects]); 
-      // Reset Form
       setProjTitle(''); setProjDesc(''); setProjLocation(''); setProjFiles([]); 
       document.getElementById('project-file-input').value = ""; 
       toast.success('Project Submitted!', { id: loadToast });
@@ -281,11 +275,24 @@ const Dashboard = () => {
     setProjFiles(e.target.files); 
   };
   
+  // 🔥 UPDATED: Fix messy filenames (remove %20 etc.)
   const getFileName = (path) => {
     if (!path) return 'File';
-    // Handle Cloudinary Paths
-    const serverFileName = path.split(/[/\\]/).pop(); 
-    return serverFileName.length > 20 ? serverFileName.substring(0, 15) + '...' : serverFileName;
+    
+    // 1. Get the filename from URL
+    let serverFileName = path.split(/[/\\]/).pop(); 
+
+    // 2. Decode URL (Turn "My%20File.pdf" into "My File.pdf")
+    try {
+        serverFileName = decodeURIComponent(serverFileName);
+    } catch (e) {
+        // if decoding fails, just use the original
+    }
+
+    // 3. Truncate if too long
+    return serverFileName.length > 25 
+      ? serverFileName.substring(0, 20) + '...' 
+      : serverFileName;
   };
 
   const isAdmin = currentUser?.role === 'admin';

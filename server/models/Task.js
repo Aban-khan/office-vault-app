@@ -5,14 +5,22 @@ const taskSchema = mongoose.Schema({
   description: { type: String },
   priority: { type: String, default: 'Medium' },
   status: { type: String, default: 'Pending' },
+  
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
   },
-  file: { type: String }, // Path to attached file
-  
-  // --- NEW FIELD FOR THE MESSAGE BOX ---
+
+  // 🔥 NEW FIELD: Link this task to a specific Project
+  project: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Project' 
+  },
+
+  file: { type: String }, // Cloudinary URL path
+
+  // Message box for Employee -> Admin
   employeeReply: { 
     type: String, 
     default: '' 

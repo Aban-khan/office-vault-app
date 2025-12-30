@@ -14,14 +14,17 @@ const Dashboard = () => {
   const [employees, setEmployees] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]); 
 
-  // FORMS
+  // FORMS - TASKS
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDesc, setTaskDesc] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [assignedTo, setAssignedTo] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(''); // 🔥 NEW: Selected Project ID
   const [taskFile, setTaskFile] = useState(null);
 
+  // FORMS - PROJECTS
   const [projTitle, setProjTitle] = useState('');
+  const [projLocation, setProjLocation] = useState(''); // 🔥 NEW: Project Location
   const [projDesc, setProjDesc] = useState('');
   const [projFiles, setProjFiles] = useState([]); 
 
@@ -83,8 +86,6 @@ const Dashboard = () => {
            icon: "/logo192.png",
            vibrate: [200, 100, 200]
         });
-        // Play a sound (optional, browsers block this sometimes)
-        // const audio = new Audio('/notification.mp3'); audio.play().catch(e=>{});
         
         toast("New Task Received!", { icon: '🔔', duration: 5000 });
       }
@@ -119,6 +120,7 @@ const Dashboard = () => {
       formData.append('description', taskDesc);
       formData.append('priority', priority);
       formData.append('assignedTo', assignedTo);
+      formData.append('projectId', selectedProjectId); // 🔥 NEW: Send Project ID
       if (taskFile) formData.append('file', taskFile);
       
       const { data } = await axios.post(`${API_BASE}/tasks`, formData, config);
@@ -130,7 +132,8 @@ const Dashboard = () => {
           toast.success('Task Assigned Successfully!', { id: loadToast });
       }
       fetchData(currentUser.token); // Refresh immediately
-      setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); 
+      // Reset Form
+      setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); setSelectedProjectId('');
 
     } catch (error) {
       console.error(error);
@@ -163,7 +166,8 @@ const Dashboard = () => {
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    if (!projTitle || projFiles.length === 0) return toast.error('Title and 1 File required');
+    // 🔥 NEW: Check for Location
+    if (!projTitle || !projLocation || projFiles.length === 0) return toast.error('Title, Location and File required');
     
     const loadToast = toast.loading('Uploading Project...');
     try {
@@ -171,12 +175,14 @@ const Dashboard = () => {
       const formData = new FormData();
       formData.append('title', projTitle);
       formData.append('description', projDesc);
+      formData.append('location', projLocation); // 🔥 NEW: Send Location
       for (let i = 0; i < projFiles.length; i++) {
         formData.append('files', projFiles[i]);
       }
       const { data } = await axios.post(`${API_BASE}/projects`, formData, config);
       setProjects([data, ...projects]); 
-      setProjTitle(''); setProjDesc(''); setProjFiles([]); 
+      // Reset Form
+      setProjTitle(''); setProjDesc(''); setProjLocation(''); setProjFiles([]); 
       document.getElementById('project-file-input').value = ""; 
       toast.success('Project Submitted!', { id: loadToast });
     } catch (error) {
@@ -309,18 +315,32 @@ const Dashboard = () => {
                 <div className="p-6 bg-[#FFF8E7] rounded shadow-md border border-[#D7CCC8]">
                   <h3 className="mb-4 text-lg font-bold text-[#3E2723]">Assign New Task</h3>
                   <form onSubmit={handleCreateTask} className="flex flex-col gap-3">
+                    
+                    {/* 🔥 NEW: Project Dropdown */}
+                    <label className="text-xs font-bold text-[#5D4037] uppercase">Select Project (Optional)</label>
+                    <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-white text-[#3E2723] font-semibold">
+                        <option value="">-- No Specific Project --</option>
+                        {projects.map(p => (
+                            <option key={p._id} value={p._id}>{p.title} ({p.location})</option>
+                        ))}
+                    </select>
+
+                    <label className="text-xs font-bold text-[#5D4037] uppercase">Task Details</label>
                     <input type="text" placeholder="Title" className="p-2 border border-[#A1887F] rounded bg-white" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
                     <input type="text" placeholder="Description" className="p-2 border border-[#A1887F] rounded bg-white" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
+                    
                     <select value={priority} onChange={(e) => setPriority(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-white text-[#3E2723]">
                         <option value="Low">Low Priority</option>
                         <option value="Medium">Medium Priority</option>
                         <option value="High">High Priority</option>
                     </select>
+                    
                     <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-[#EFEBE9] font-bold text-[#3E2723]">
                         <option value="">-- Select Employee --</option>
                         <option value="all">📢 ALL EMPLOYEES</option> 
                         {employees.map(e => (<option key={e._id} value={e._id}>{e.name}</option>))}
                     </select>
+                    
                     <input type="file" className="text-sm text-[#5D4037]" onChange={(e) => setTaskFile(e.target.files[0])} />
                     <button className="py-2 text-white bg-[#33691E] rounded hover:bg-[#558B2F] font-bold shadow-sm">Create Task</button>
                   </form>
@@ -355,6 +375,12 @@ const Dashboard = () => {
                     <div className={`absolute top-0 left-0 w-1 h-full rounded-l ${task.status === 'Completed' ? 'bg-[#33691E]' : task.status === 'In Progress' ? 'bg-[#F57F17]' : 'bg-[#D32F2F]'}`}></div>
                     {isAdmin && (<button onClick={() => handleDeleteTask(task._id)} className="absolute top-2 right-2 text-[#A1887F] hover:text-[#D32F2F] font-bold" title="Delete Task">🗑️</button>)}
                     <div>
+                      {/* 🔥 NEW: Show Project Name if linked */}
+                      {task.project && (
+                          <div className="text-xs font-bold text-[#BF360C] uppercase tracking-wide mb-1">
+                              🏗️ {task.project.title} <span className="text-[#8D6E63]">({task.project.location})</span>
+                          </div>
+                      )}
                       <h3 className="font-bold mr-6 text-[#3E2723]">{task.title}</h3>
                       <p className="text-sm text-[#5D4037]">{task.description}</p>
                       {task.file && <a href={task.file} target="_blank" rel="noreferrer" className="text-[#1565C0] text-sm block mt-1 hover:underline">📎 Attachment</a>}
@@ -391,7 +417,12 @@ const Dashboard = () => {
                 <h3 className="mb-4 text-lg font-bold text-[#3E2723]">🚀 Submit New Project</h3>
                 <form onSubmit={handleCreateProject} className="flex flex-col gap-3">
                   <label className="text-xs font-bold text-[#5D4037]">Project Name</label>
-                  <input type="text" placeholder="e.g. Q1 Marketing Plan" className="p-2 border border-[#A1887F] rounded bg-white" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
+                  <input type="text" placeholder="e.g. City Center Mall" className="p-2 border border-[#A1887F] rounded bg-white" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
+                  
+                  {/* 🔥 NEW: Project Location Input */}
+                  <label className="text-xs font-bold text-[#5D4037]">Location / Site</label>
+                  <input type="text" placeholder="e.g. Mumbai, Site B" className="p-2 border border-[#A1887F] rounded bg-white" value={projLocation} onChange={(e) => setProjLocation(e.target.value)} />
+
                   <label className="text-xs font-bold text-[#5D4037]">Details</label>
                   <textarea rows="3" placeholder="Description..." className="p-2 border border-[#A1887F] rounded bg-white" value={projDesc} onChange={(e) => setProjDesc(e.target.value)} />
                   <label className="text-xs font-bold text-[#5D4037]">Initial Files</label>
@@ -409,8 +440,12 @@ const Dashboard = () => {
                     projects.map(proj => (
                     <div key={proj._id} className="p-4 mb-4 bg-[#FFF8E7] border border-[#D7CCC8] rounded shadow-sm">
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-bold text-lg text-[#3E2723]">{proj.title}</h3>
-                          {/* 🔥 EVERYONE can now delete the project if needed (or just admin) */}
+                          <div>
+                            <h3 className="font-bold text-lg text-[#3E2723]">{proj.title}</h3>
+                            {/* 🔥 NEW: Show Location in Project List */}
+                            <p className="text-xs font-bold text-[#BF360C]">📍 {proj.location}</p>
+                          </div>
+                          {/* Everyone can delete */}
                           {isAdmin && (<button className="text-[#A1887F] hover:text-[#D32F2F] font-bold" onClick={() => handleDeleteProject(proj._id)} title="Delete Project">❌</button>)}
                         </div>
                         <div className="mb-4"><p className="text-sm text-[#5D4037]">{proj.description || "No description provided."}</p></div>
@@ -420,7 +455,7 @@ const Dashboard = () => {
                                 <div key={index} className="flex items-center gap-2 border border-[#A1887F] rounded-full px-3 py-1 bg-[#EFEBE9] text-sm">
                                     <a href={file} target="_blank" rel="noreferrer" className="no-underline text-[#3E2723] font-bold hover:text-[#BF360C]" title={getFileName(file)}>📄 {getFileName(file)}</a>
                                     
-                                    {/* 🔥 🔥 TRASH BIN FOR EVERYONE: REMOVED isAdmin CHECK HERE */}
+                                    {/* Trash bin for files */}
                                     <button onClick={() => handleDeleteFile(proj._id, file)} className="text-[#C62828] font-bold hover:text-[#D32F2F] border-l border-[#D7CCC8] pl-2" title="Delete this file">✖</button>
                                 
                                 </div>

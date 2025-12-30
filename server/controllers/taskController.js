@@ -5,7 +5,8 @@ const User = require('../models/User');
 // @route   POST /api/tasks
 const createTask = async (req, res) => {
   try {
-    const { title, description, priority, assignedTo } = req.body;
+    // 1. Accept 'projectId' from frontend
+    const { title, description, priority, assignedTo, projectId } = req.body;
 
     if (!title || !assignedTo) {
       return res.status(400).json({ message: 'Title and Assigned Employee are required' });
@@ -13,7 +14,6 @@ const createTask = async (req, res) => {
 
     let filePath = null;
     if (req.file) {
-      // Cloudinary automatically puts the Secure URL in 'path'
       filePath = req.file.path; 
     }
 
@@ -31,7 +31,8 @@ const createTask = async (req, res) => {
         description,
         priority,
         assignedTo: employee._id, 
-        file: filePath, // This is now a Cloudinary URL
+        project: projectId, // <--- Link to Project
+        file: filePath,
         status: 'Pending',
         employeeReply: ''
       }));
@@ -47,10 +48,14 @@ const createTask = async (req, res) => {
       description,
       priority,
       assignedTo,
+      project: projectId, // <--- Link to Project
       file: filePath,
     });
 
     await task.populate('assignedTo', 'name email');
+    // Also populate Project name so we can send it back to frontend immediately
+    await task.populate('project', 'title location'); 
+
     res.status(201).json(task);
 
   } catch (error) {
@@ -64,9 +69,10 @@ const getTasks = async (req, res) => {
   try {
     let tasks;
     if (req.user.role === 'admin') {
-      tasks = await Task.find({}).populate('assignedTo', 'name');
+      // Populate 'project' to get the title and location
+      tasks = await Task.find({}).populate('assignedTo', 'name').populate('project', 'title location');
     } else {
-      tasks = await Task.find({ assignedTo: req.user._id }).populate('assignedTo', 'name');
+      tasks = await Task.find({ assignedTo: req.user._id }).populate('assignedTo', 'name').populate('project', 'title location');
     }
     res.json(tasks);
   } catch (error) {
@@ -94,6 +100,7 @@ const updateTask = async (req, res) => {
 
     const updatedTask = await task.save();
     await updatedTask.populate('assignedTo', 'name');
+    await updatedTask.populate('project', 'title location'); // Keep project info on update
     res.json(updatedTask);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -106,10 +113,6 @@ const deleteTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
-
-    // 🔥 REMOVED: 'fs.unlink' code. 
-    // We do not need to delete files from the local disk anymore 
-    // because they are on Cloudinary.
     
     await task.deleteOne();
     res.json({ message: 'Task removed' });

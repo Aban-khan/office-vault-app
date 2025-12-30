@@ -1,13 +1,18 @@
 const Project = require('../models/Project');
-// ❌ REMOVED: const fs = require('fs'); (Not needed for Cloudinary)
 
 // @desc    Submit a new project (Multiple Files)
 const createProject = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    // 🔥 UPDATE: Accept 'location' from the frontend
+    const { title, description, location } = req.body;
     
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'Please upload at least one project file' });
+    }
+
+    // 🔥 UPDATE: Validation - Ensure location is provided
+    if (!location) {
+        return res.status(400).json({ message: 'Project Location is required' });
     }
 
     // Cloudinary automatically puts the secure URL in file.path
@@ -16,6 +21,7 @@ const createProject = async (req, res) => {
     const project = await Project.create({
       title,
       description,
+      location, // 🔥 UPDATE: Save the location to the database
       files: filePaths,
       createdBy: req.user._id, 
     });
@@ -46,14 +52,12 @@ const deleteProject = async (req, res) => {
 
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
-    // 🔥 AUTH FIX: Allow deletion if user is Admin OR if user is the Creator
+    // Allow deletion if user is Admin OR if user is the Creator
     if (req.user.role !== 'admin' && project.createdBy.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Not authorized to delete this project' });
     }
 
-    // ❌ REMOVED: fs.unlink loop.
-    // We just delete the database record. The files stay in Cloudinary (Safe Archive).
-
+    // Note: We only delete the DB record. Files stay in Cloudinary as archive.
     await project.deleteOne();
     res.json({ message: 'Project removed', id: req.params.id });
   } catch (error) {
@@ -94,11 +98,7 @@ const removeFileFromProject = async (req, res) => {
 
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
-    // ❌ REMOVED: fs.unlink code.
-    // Since filePath is now a URL (https://...), we cannot delete it with fs.unlink.
-    // We simply remove it from the database list below.
-
-    // 2. Remove from DB Array
+    // Remove from DB Array
     if (project.files) {
         project.files = project.files.filter(file => file !== filePath);
     }

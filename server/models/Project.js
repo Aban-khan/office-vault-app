@@ -4,7 +4,13 @@ const projectSchema = mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String },
   
-  // --- CHANGE: Store an ARRAY of strings, not just one ---
+  // 🔥 NEW FIELD: Location (Site Name)
+  location: { 
+    type: String, 
+    required: true 
+  },
+
+  // Store an ARRAY of file links (Cloudinary URLs)
   files: [{
     type: String
   }],

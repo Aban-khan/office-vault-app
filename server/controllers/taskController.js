@@ -1,6 +1,5 @@
 const Task = require('../models/Task');
-const User = require('../models/User'); // <--- 1. NEW IMPORT (Required to find employees)
-const fs = require('fs');
+const User = require('../models/User');
 
 // @desc    Assign a new task
 // @route   POST /api/tasks
@@ -14,39 +13,35 @@ const createTask = async (req, res) => {
 
     let filePath = null;
     if (req.file) {
-      filePath = req.file.path;
+      // Cloudinary automatically puts the Secure URL in 'path'
+      filePath = req.file.path; 
     }
 
-    // --- 2. NEW LOGIC: Handle "All Employees" ---
+    // --- BULK ASSIGNMENT LOGIC (All Employees) ---
     if (assignedTo === 'all') {
       
-      // Find all users who are NOT 'admin'
       const allEmployees = await User.find({ role: { $ne: 'admin' } });
 
       if (allEmployees.length === 0) {
         return res.status(400).json({ message: 'No employees found to assign task to' });
       }
 
-      // Create a task object for every single employee
       const tasksToCreate = allEmployees.map(employee => ({
         title,
         description,
         priority,
-        assignedTo: employee._id, // Assign to this specific employee
-        file: filePath,
+        assignedTo: employee._id, 
+        file: filePath, // This is now a Cloudinary URL
         status: 'Pending',
         employeeReply: ''
       }));
 
-      // Insert all tasks into the database at once
       await Task.insertMany(tasksToCreate);
 
-      // Return a special success message
       return res.status(201).json({ message: 'Task assigned to ALL employees successfully', isBulk: true });
     }
-    // ---------------------------------------------
 
-    // 3. OLD LOGIC: Handle Single Employee Assignment
+    // --- SINGLE ASSIGNMENT LOGIC ---
     const task = await Task.create({
       title,
       description,
@@ -55,7 +50,6 @@ const createTask = async (req, res) => {
       file: filePath,
     });
 
-    // Populate user details immediately for the frontend
     await task.populate('assignedTo', 'name email');
     res.status(201).json(task);
 
@@ -69,11 +63,9 @@ const createTask = async (req, res) => {
 const getTasks = async (req, res) => {
   try {
     let tasks;
-    // If Admin: See ALL tasks
     if (req.user.role === 'admin') {
       tasks = await Task.find({}).populate('assignedTo', 'name');
     } else {
-      // If Employee: See ONLY their assigned tasks
       tasks = await Task.find({ assignedTo: req.user._id }).populate('assignedTo', 'name');
     }
     res.json(tasks);
@@ -92,19 +84,15 @@ const updateTask = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Update Status if provided
     if (req.body.status) {
       task.status = req.body.status;
     }
 
-    // Update Employee Reply if provided
     if (req.body.employeeReply !== undefined) {
       task.employeeReply = req.body.employeeReply;
     }
 
     const updatedTask = await task.save();
-    
-    // Populate for frontend
     await updatedTask.populate('assignedTo', 'name');
     res.json(updatedTask);
   } catch (error) {
@@ -119,13 +107,10 @@ const deleteTask = async (req, res) => {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
 
-    // Delete attached file if exists
-    if (task.file && fs.existsSync(task.file)) {
-      fs.unlink(task.file, (err) => {
-        if (err) console.error("Failed to delete task file", err);
-      });
-    }
-
+    // 🔥 REMOVED: 'fs.unlink' code. 
+    // We do not need to delete files from the local disk anymore 
+    // because they are on Cloudinary.
+    
     await task.deleteOne();
     res.json({ message: 'Task removed' });
   } catch (error) {

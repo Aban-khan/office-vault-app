@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -27,6 +27,9 @@ const Dashboard = () => {
 
   const [replyTexts, setReplyTexts] = useState({});
 
+  // Use Ref to track previous task count for notifications
+  const prevTaskCount = useRef(0);
+
   const API_BASE = 'https://office-vault-app.onrender.com/api';
 
   useEffect(() => {
@@ -37,13 +40,21 @@ const Dashboard = () => {
       setCurrentUser(userInfo);
       fetchData(userInfo.token);
       
+      // Request Notification Permission on Load
       if (Notification.permission !== 'granted') {
         Notification.requestPermission();
       }
+
+      // 🔥 AUTO-REFRESH: Check for new tasks every 30 seconds
+      const interval = setInterval(() => {
+        fetchData(userInfo.token, true); // true = quiet mode (no loading spinner)
+      }, 30000);
+
+      return () => clearInterval(interval); // Cleanup on close
     }
   }, [navigate]);
 
-  const fetchData = async (token) => {
+  const fetchData = async (token, isAutoRefresh = false) => {
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -63,13 +74,23 @@ const Dashboard = () => {
         reqTasks, reqProjects, reqUsers, reqPending
       ]);
 
-      if (resTasks.data.length > tasks.length && tasks.length > 0) {
+      // 🔔 NOTIFICATION LOGIC
+      // If we have MORE tasks now than before, send a notification
+      if (resTasks.data.length > prevTaskCount.current && prevTaskCount.current > 0) {
+        // Send Phone/Desktop Notification
         new Notification("Highrise Vault", { 
-           body: "You have a new task assigned!", 
-           icon: "/logo192.png" 
+           body: "📢 New Task Assigned!", 
+           icon: "/logo192.png",
+           vibrate: [200, 100, 200]
         });
-        toast("New Task Received!", { icon: '🔔' });
+        // Play a sound (optional, browsers block this sometimes)
+        // const audio = new Audio('/notification.mp3'); audio.play().catch(e=>{});
+        
+        toast("New Task Received!", { icon: '🔔', duration: 5000 });
       }
+
+      // Update the reference tracker
+      prevTaskCount.current = resTasks.data.length;
 
       setTasks(resTasks.data);
       setProjects(resProjects.data);
@@ -78,8 +99,7 @@ const Dashboard = () => {
           setPendingUsers(resPending.data);
       }
     } catch (error) {
-      console.error('Error fetching data', error);
-      toast.error("Failed to load data");
+      if (!isAutoRefresh) console.error('Error fetching data', error);
     }
   };
 
@@ -105,12 +125,11 @@ const Dashboard = () => {
       
       if (assignedTo === 'all') {
           toast.success('Task Assigned to Everyone! 📢', { id: loadToast });
-          fetchData(currentUser.token); 
       } else {
           setTasks([...tasks, data]);
           toast.success('Task Assigned Successfully!', { id: loadToast });
       }
-
+      fetchData(currentUser.token); // Refresh immediately
       setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); 
 
     } catch (error) {
@@ -258,19 +277,15 @@ const Dashboard = () => {
   
   const getFileName = (path) => {
     if (!path) return 'File';
+    // Handle Cloudinary Paths
     const serverFileName = path.split(/[/\\]/).pop(); 
-    const parts = serverFileName.split('-');
-    if (parts.length > 1) return parts.slice(1).join('-'); 
-    return serverFileName;
+    return serverFileName.length > 20 ? serverFileName.substring(0, 15) + '...' : serverFileName;
   };
 
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    // ✨ UPDATED BACKGROUND: Warm Earthy Beige
     <div className="min-h-screen bg-[#EFEBE9]">
-      
-      {/* 🏢 NAVBAR: Dark Coffee Brown */}
       <nav className="p-4 text-white bg-[#3E2723] shadow-md">
         <div className="container flex justify-between items-center mx-auto">
           <h1 className="text-xl font-bold font-serif tracking-wide">Highrise Vault</h1>
@@ -342,7 +357,7 @@ const Dashboard = () => {
                     <div>
                       <h3 className="font-bold mr-6 text-[#3E2723]">{task.title}</h3>
                       <p className="text-sm text-[#5D4037]">{task.description}</p>
-                      {task.file && <a href={`${API_BASE}/${task.file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="text-[#1565C0] text-sm block mt-1 hover:underline">📎 Attachment</a>}
+                      {task.file && <a href={task.file} target="_blank" rel="noreferrer" className="text-[#1565C0] text-sm block mt-1 hover:underline">📎 Attachment</a>}
                     </div>
                     <div className="mt-4">
                       <div className="text-xs mb-2"><span className="font-bold text-[#8D6E63]">ASSIGNED TO:</span> <span className="text-[#3E2723] font-bold">{task.assignedTo?.name}</span></div>
@@ -395,6 +410,7 @@ const Dashboard = () => {
                     <div key={proj._id} className="p-4 mb-4 bg-[#FFF8E7] border border-[#D7CCC8] rounded shadow-sm">
                         <div className="flex justify-between items-start mb-2">
                           <h3 className="font-bold text-lg text-[#3E2723]">{proj.title}</h3>
+                          {/* 🔥 EVERYONE can now delete the project if needed (or just admin) */}
                           {isAdmin && (<button className="text-[#A1887F] hover:text-[#D32F2F] font-bold" onClick={() => handleDeleteProject(proj._id)} title="Delete Project">❌</button>)}
                         </div>
                         <div className="mb-4"><p className="text-sm text-[#5D4037]">{proj.description || "No description provided."}</p></div>
@@ -402,8 +418,11 @@ const Dashboard = () => {
                           <div className="flex flex-wrap gap-2">
                             {proj.files && proj.files.map((file, index) => (
                                 <div key={index} className="flex items-center gap-2 border border-[#A1887F] rounded-full px-3 py-1 bg-[#EFEBE9] text-sm">
-                                    <a href={`${API_BASE}/${file.replace('\\','/')}`} target="_blank" rel="noreferrer" className="no-underline text-[#3E2723] font-bold hover:text-[#BF360C]" title={getFileName(file)}>📄 {getFileName(file)}</a>
-                                    {isAdmin && (<button onClick={() => handleDeleteFile(proj._id, file)} className="text-[#C62828] font-bold hover:text-[#D32F2F] border-l border-[#D7CCC8] pl-2">✖</button>)}
+                                    <a href={file} target="_blank" rel="noreferrer" className="no-underline text-[#3E2723] font-bold hover:text-[#BF360C]" title={getFileName(file)}>📄 {getFileName(file)}</a>
+                                    
+                                    {/* 🔥 🔥 TRASH BIN FOR EVERYONE: REMOVED isAdmin CHECK HERE */}
+                                    <button onClick={() => handleDeleteFile(proj._id, file)} className="text-[#C62828] font-bold hover:text-[#D32F2F] border-l border-[#D7CCC8] pl-2" title="Delete this file">✖</button>
+                                
                                 </div>
                             ))}
                             <label htmlFor={`upload-${proj._id}`} className="cursor-pointer border-dashed border-2 border-[#A1887F] bg-white text-[#5D4037] px-3 py-1 rounded-full text-sm font-bold hover:bg-[#EFEBE9]">➕ Add File</label>

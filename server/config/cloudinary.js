@@ -14,18 +14,48 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
+    
+    // Check if it is a standard image (to optionally format it)
+    const isImage = file.mimetype.startsWith('image');
+
     return {
       folder: 'highrise-vault',
-      resource_type: 'auto', // 🔥 CRITICAL: Fixes PDF opening issues
-      allowed_formats: ['jpg', 'png', 'jpeg', 'pdf', 'doc', 'docx', 'xlsx'],
       
-      // 🔥 FIX NAME: Use the original filename
+      // "auto" is CRITICAL for .dwg and .dxf to work (treats them as raw files)
+      resource_type: 'auto', 
+      
+      // 🔥 UPDATED: The Complete Engineering List
+      allowed_formats: [
+        // Standard Images
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg',
+        
+        // Documents
+        'pdf', 'doc', 'docx', 'txt', 'rtf',
+        
+        // Spreadsheets & Presentations
+        'xls', 'xlsx', 'csv', 'ppt', 'pptx',
+
+        // 🔥 ENGINEERING & CAD (AutoCAD, Revit, 3D)
+        'dwg',  // AutoCAD Drawing
+        'dxf',  // Drawing Exchange Format
+        'dgn',  // MicroStation
+        'stl',  // 3D Printing
+        'obj',  // 3D Object
+        'fbx',  // 3D Model
+        'skp',  // SketchUp
+        'ifc',  // BIM (Building Information Modeling)
+        'rvt',  // Revit (Note: Cloudinary treats these as raw)
+        
+        // Archives (Engineers often upload zipped folders)
+        'zip', 'rar', '7z'
+      ],
+      
+      // Force standard images to JPG, but leave CAD files alone
+      format: isImage ? 'jpg' : undefined,
+
       use_filename: true, 
-      unique_filename: false, // Warning: If 2 files have same name, one will be overwritten. Set true if you want random numbers.
+      unique_filename: false, 
       overwrite: true,
-      
-      // Force the name to be the original name (minus extension)
-      public_id: file.originalname.replace(/\.[^/.]+$/, ""), 
     };
   },
 });

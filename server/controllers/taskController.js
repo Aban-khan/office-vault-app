@@ -5,7 +5,6 @@ const User = require('../models/User');
 // @route   POST /api/tasks
 const createTask = async (req, res) => {
   try {
-    // 1. Accept 'projectId' from frontend
     const { title, description, priority, assignedTo, projectId } = req.body;
 
     if (!title || !assignedTo) {
@@ -16,6 +15,10 @@ const createTask = async (req, res) => {
     if (req.file) {
       filePath = req.file.path; 
     }
+
+    // 🔥 FIX: Handle empty Project ID
+    // If projectId is an empty string "" (from "No Specific Project"), set it to null.
+    const validProject = (projectId && projectId.trim() !== "") ? projectId : null;
 
     // --- BULK ASSIGNMENT LOGIC (All Employees) ---
     if (assignedTo === 'all') {
@@ -31,7 +34,7 @@ const createTask = async (req, res) => {
         description,
         priority,
         assignedTo: employee._id, 
-        project: projectId, // <--- Link to Project
+        project: validProject, // <--- Use the safe variable
         file: filePath,
         status: 'Pending',
         employeeReply: ''
@@ -48,17 +51,21 @@ const createTask = async (req, res) => {
       description,
       priority,
       assignedTo,
-      project: projectId, // <--- Link to Project
+      project: validProject, // <--- Use the safe variable
       file: filePath,
     });
 
     await task.populate('assignedTo', 'name email');
-    // Also populate Project name so we can send it back to frontend immediately
-    await task.populate('project', 'title location'); 
+    
+    // Only populate project if it exists
+    if (validProject) {
+        await task.populate('project', 'title location'); 
+    }
 
     res.status(201).json(task);
 
   } catch (error) {
+    console.error("Create Task Error:", error); // Log error for debugging
     res.status(400).json({ message: error.message });
   }
 };
@@ -69,10 +76,15 @@ const getTasks = async (req, res) => {
   try {
     let tasks;
     if (req.user.role === 'admin') {
-      // Populate 'project' to get the title and location
-      tasks = await Task.find({}).populate('assignedTo', 'name').populate('project', 'title location');
+      tasks = await Task.find({})
+        .populate('assignedTo', 'name')
+        .populate('project', 'title location')
+        .sort({ createdAt: -1 }); // Sort by newest first
     } else {
-      tasks = await Task.find({ assignedTo: req.user._id }).populate('assignedTo', 'name').populate('project', 'title location');
+      tasks = await Task.find({ assignedTo: req.user._id })
+        .populate('assignedTo', 'name')
+        .populate('project', 'title location')
+        .sort({ createdAt: -1 });
     }
     res.json(tasks);
   } catch (error) {
@@ -100,7 +112,11 @@ const updateTask = async (req, res) => {
 
     const updatedTask = await task.save();
     await updatedTask.populate('assignedTo', 'name');
-    await updatedTask.populate('project', 'title location'); // Keep project info on update
+    
+    if (updatedTask.project) {
+        await updatedTask.populate('project', 'title location');
+    }
+    
     res.json(updatedTask);
   } catch (error) {
     res.status(400).json({ message: error.message });

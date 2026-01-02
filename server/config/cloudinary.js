@@ -15,38 +15,41 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     
-    // 1. Get the extension (dwg, jpg, pdf)
+    // 1. Get the extension (e.g. "dwg", "jpg")
     const ext = file.originalname.split('.').pop().toLowerCase();
     
     // 2. Get the name WITHOUT the extension
     const nameOnly = file.originalname.replace(/\.[^/.]+$/, "");
 
-    // 🔥 FIX: Sanitize the name (Replace spaces & weird chars with underscores)
-    // "NEW BUILDINGS AT BLOCK 1" -> "NEW_BUILDINGS_AT_BLOCK_1"
+    // 3. Sanitize the name (Replace spaces/special chars with underscores)
+    // Example: "My Project File.dwg" -> "My_Project_File"
     const safeName = nameOnly.replace(/[^a-zA-Z0-9]/g, "_");
 
-    // 3. Define Raw vs Image types
+    // 4. Define Raw vs Image types
+    // DWG, DXF, ZIP, etc. MUST be treated as "raw"
     const rawFiles = ['dwg', 'dxf', 'zip', 'rar', '7z', 'stl', 'obj', 'fbx', 'rvt', 'ifc', 'dgn'];
-    const imageFiles = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff'];
-
-    // 4. LOGIC: Handle Raw Files (DWG, CAD, Zips)
+    
+    // 5. LOGIC: Handle Raw Files (Engineering/CAD)
     if (rawFiles.includes(ext)) {
       return {
         folder: 'highrise-vault',
-        resource_type: 'raw', // Force Raw
-        public_id: safeName,  // Use the CLEAN name
-        format: undefined,    // Do not convert
+        resource_type: 'raw', 
+        // 🔥 CRITICAL FIX: Add the extension back for Raw files!
+        // Cloudinary needs "filename.dwg" to serve it correctly.
+        public_id: `${safeName}.${ext}`, 
+        format: undefined,
       };
     }
 
-    // 5. LOGIC: Handle Images & PDFs
+    // 6. LOGIC: Handle Images, PDFs, Docs
     return {
       folder: 'highrise-vault',
       resource_type: 'auto', 
-      public_id: safeName,  // Use the CLEAN name
+      public_id: safeName, // Images don't need the extension here
       
-      // Convert Images to JPG (fix iPhone HEIC), leave PDF alone
-      format: imageFiles.includes(ext) ? 'jpg' : undefined,
+      // If it's an image, force JPG (fixes iPhone HEIC)
+      // If it's a PDF/Doc, leave it alone
+      format: ['jpg', 'jpeg', 'png', 'heic', 'heif'].includes(ext) ? 'jpg' : undefined,
     };
   },
 });

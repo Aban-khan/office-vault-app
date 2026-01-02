@@ -15,23 +15,36 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     
-    // 1. Check if it looks like an image (including iPhone HEIC)
-    // We check the extension directly to be safe
-    const isImage = file.mimetype.startsWith('image') || file.originalname.match(/\.(heic|heif)$/i);
+    // 1. Check if it is an image (including iPhone HEIC)
+    const fileExtension = file.originalname.split('.').pop().toLowerCase();
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(fileExtension);
 
     return {
       folder: 'highrise-vault',
       
-      // "auto" is CRITICAL. It detects if it's a raw CAD file, PDF, or Image.
+      // "auto" is CRITICAL. It tells Cloudinary "If it's a PDF, treat as PDF. If image, treat as image."
       resource_type: 'auto', 
       
-      // ❌ REMOVED: allowed_formats
-      // 🔥 FIX: We removed the allowed list. Now it accepts EVERYTHING.
-      // (DWG, DXF, ZIP, RAR, HEIC, JPG, PDF, etc.)
+      // 🔥 THE MASTER LIST: Explicitly allow EVERYTHING you need
+      allowed_formats: [
+        // Images (Standard + iPhone)
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg',
+        
+        // Documents (Office)
+        'pdf', 'doc', 'docx', 'txt', 'rtf',
+        
+        // Spreadsheets & Presentations
+        'xls', 'xlsx', 'csv', 'ppt', 'pptx',
+        
+        // Engineering & CAD
+        'dwg', 'dxf', 'dgn', 'stl', 'obj', 'fbx', 'skp', 'ifc', 'rvt',
+        
+        // Archives
+        'zip', 'rar', '7z'
+      ],
       
-      // 🔥 FIX FOR IPHONE:
-      // If it is an image, force it to 'jpg' so it works on all phones.
-      // If it is a document (PDF, CAD), leave it alone (undefined).
+      // 🔥 FIX FOR IPHONE: Convert HEIC to JPG so it opens on Android/Windows
+      // If it's not an image (like a PDF or DWG), we leave the format alone (undefined)
       format: isImage ? 'jpg' : undefined,
 
       use_filename: true, 

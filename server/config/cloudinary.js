@@ -15,41 +15,38 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     
-    // 1. Check if it is an image (including iPhone HEIC)
-    const fileExtension = file.originalname.split('.').pop().toLowerCase();
-    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(fileExtension);
+    // 1. Get the extension (dwg, jpg, pdf)
+    const ext = file.originalname.split('.').pop().toLowerCase();
+    
+    // 2. Get the name WITHOUT the extension
+    const nameOnly = file.originalname.replace(/\.[^/.]+$/, "");
 
+    // 🔥 FIX: Sanitize the name (Replace spaces & weird chars with underscores)
+    // "NEW BUILDINGS AT BLOCK 1" -> "NEW_BUILDINGS_AT_BLOCK_1"
+    const safeName = nameOnly.replace(/[^a-zA-Z0-9]/g, "_");
+
+    // 3. Define Raw vs Image types
+    const rawFiles = ['dwg', 'dxf', 'zip', 'rar', '7z', 'stl', 'obj', 'fbx', 'rvt', 'ifc', 'dgn'];
+    const imageFiles = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff'];
+
+    // 4. LOGIC: Handle Raw Files (DWG, CAD, Zips)
+    if (rawFiles.includes(ext)) {
+      return {
+        folder: 'highrise-vault',
+        resource_type: 'raw', // Force Raw
+        public_id: safeName,  // Use the CLEAN name
+        format: undefined,    // Do not convert
+      };
+    }
+
+    // 5. LOGIC: Handle Images & PDFs
     return {
       folder: 'highrise-vault',
-      
-      // "auto" is CRITICAL. It tells Cloudinary "If it's a PDF, treat as PDF. If image, treat as image."
       resource_type: 'auto', 
+      public_id: safeName,  // Use the CLEAN name
       
-      // 🔥 THE MASTER LIST: Explicitly allow EVERYTHING you need
-      allowed_formats: [
-        // Images (Standard + iPhone)
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg',
-        
-        // Documents (Office)
-        'pdf', 'doc', 'docx', 'txt', 'rtf',
-        
-        // Spreadsheets & Presentations
-        'xls', 'xlsx', 'csv', 'ppt', 'pptx',
-        
-        // Engineering & CAD
-        'dwg', 'dxf', 'dgn', 'stl', 'obj', 'fbx', 'skp', 'ifc', 'rvt',
-        
-        // Archives
-        'zip', 'rar', '7z'
-      ],
-      
-      // 🔥 FIX FOR IPHONE: Convert HEIC to JPG so it opens on Android/Windows
-      // If it's not an image (like a PDF or DWG), we leave the format alone (undefined)
-      format: isImage ? 'jpg' : undefined,
-
-      use_filename: true, 
-      unique_filename: false, 
-      overwrite: true,
+      // Convert Images to JPG (fix iPhone HEIC), leave PDF alone
+      format: imageFiles.includes(ext) ? 'jpg' : undefined,
     };
   },
 });

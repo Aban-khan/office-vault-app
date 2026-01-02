@@ -15,42 +15,23 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     
-    // Check if it is a standard image (to optionally format it)
-    const isImage = file.mimetype.startsWith('image');
+    // 1. Check if it looks like an image (including iPhone HEIC)
+    // We check the extension directly to be safe
+    const isImage = file.mimetype.startsWith('image') || file.originalname.match(/\.(heic|heif)$/i);
 
     return {
       folder: 'highrise-vault',
       
-      // "auto" is CRITICAL for .dwg and .dxf to work (treats them as raw files)
+      // "auto" is CRITICAL. It detects if it's a raw CAD file, PDF, or Image.
       resource_type: 'auto', 
       
-      // 🔥 UPDATED: The Complete Engineering List
-      allowed_formats: [
-        // Standard Images
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg',
-        
-        // Documents
-        'pdf', 'doc', 'docx', 'txt', 'rtf',
-        
-        // Spreadsheets & Presentations
-        'xls', 'xlsx', 'csv', 'ppt', 'pptx',
-
-        // 🔥 ENGINEERING & CAD (AutoCAD, Revit, 3D)
-        'dwg',  // AutoCAD Drawing
-        'dxf',  // Drawing Exchange Format
-        'dgn',  // MicroStation
-        'stl',  // 3D Printing
-        'obj',  // 3D Object
-        'fbx',  // 3D Model
-        'skp',  // SketchUp
-        'ifc',  // BIM (Building Information Modeling)
-        'rvt',  // Revit (Note: Cloudinary treats these as raw)
-        
-        // Archives (Engineers often upload zipped folders)
-        'zip', 'rar', '7z'
-      ],
+      // ❌ REMOVED: allowed_formats
+      // 🔥 FIX: We removed the allowed list. Now it accepts EVERYTHING.
+      // (DWG, DXF, ZIP, RAR, HEIC, JPG, PDF, etc.)
       
-      // Force standard images to JPG, but leave CAD files alone
+      // 🔥 FIX FOR IPHONE:
+      // If it is an image, force it to 'jpg' so it works on all phones.
+      // If it is a document (PDF, CAD), leave it alone (undefined).
       format: isImage ? 'jpg' : undefined,
 
       use_filename: true, 

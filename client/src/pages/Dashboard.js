@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { io } from 'socket.io-client'; // 🔥 IMPORT SOCKET
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -19,21 +20,21 @@ const Dashboard = () => {
   const [taskDesc, setTaskDesc] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [assignedTo, setAssignedTo] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(''); // 🔥 NEW: Selected Project ID
+  const [selectedProjectId, setSelectedProjectId] = useState(''); 
   const [taskFile, setTaskFile] = useState(null);
 
   // FORMS - PROJECTS
   const [projTitle, setProjTitle] = useState('');
-  const [projLocation, setProjLocation] = useState(''); // 🔥 NEW: Project Location
+  const [projLocation, setProjLocation] = useState('');
   const [projDesc, setProjDesc] = useState('');
   const [projFiles, setProjFiles] = useState([]); 
 
   const [replyTexts, setReplyTexts] = useState({});
 
-  // Use Ref to track previous task count for notifications
-  const prevTaskCount = useRef(0);
-
   const API_BASE = 'https://office-vault-app.onrender.com/api';
+
+  // 🔥 SOCKET CONNECTION REF
+  const socketRef = useRef(null);
 
   useEffect(() => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -48,12 +49,45 @@ const Dashboard = () => {
         Notification.requestPermission();
       }
 
-      // 🔥 AUTO-REFRESH: Check for new tasks every 30 seconds
-      const interval = setInterval(() => {
-        fetchData(userInfo.token, true); // true = quiet mode (no loading spinner)
-      }, 30000);
+      // --- 🔌 SOCKET SETUP ---
+      // 1. Connect to the Backend Root URL (remove /api)
+      socketRef.current = io('https://office-vault-app.onrender.com');
 
-      return () => clearInterval(interval); // Cleanup on close
+      // 2. LISTEN: New Task Created
+      socketRef.current.on('new-task', (newTask) => {
+        // Show if Admin OR if assigned to me
+        if (userInfo.role === 'admin' || newTask.assignedTo._id === userInfo._id) {
+            setTasks((prev) => [newTask, ...prev]); // Add to top
+            
+            toast("🚀 New Task Assigned!", { duration: 4000, icon: '🔔' });
+            
+            new Notification("Highrise Vault", { 
+               body: `New Task: ${newTask.title}`, 
+               icon: "/logo192.png" 
+            });
+        }
+      });
+
+      // 3. LISTEN: Bulk Tasks (Assigned to All)
+      socketRef.current.on('bulk-task-created', () => {
+          fetchData(userInfo.token, true); // Refresh list
+          toast("📢 Bulk Tasks Assigned to Everyone!");
+      });
+
+      // 4. LISTEN: Task Deleted
+      socketRef.current.on('task-deleted', (deletedId) => {
+          setTasks((prev) => prev.filter(t => t._id !== deletedId));
+      });
+      
+      // 5. LISTEN: Task Updated (Status or Reply)
+      socketRef.current.on('task-updated', (updatedTask) => {
+           setTasks((prev) => prev.map(t => t._id === updatedTask._id ? updatedTask : t));
+      });
+
+      // Cleanup: Disconnect socket when leaving dashboard
+      return () => {
+          if (socketRef.current) socketRef.current.disconnect();
+      };
     }
   }, [navigate]);
 
@@ -76,18 +110,6 @@ const Dashboard = () => {
       const [resTasks, resProjects, resUsers, resPending] = await Promise.all([
         reqTasks, reqProjects, reqUsers, reqPending
       ]);
-
-      // 🔔 NOTIFICATION LOGIC
-      if (resTasks.data.length > prevTaskCount.current && prevTaskCount.current > 0) {
-        new Notification("Highrise Vault", { 
-           body: "📢 New Task Assigned!", 
-           icon: "/logo192.png",
-           vibrate: [200, 100, 200]
-        });
-        toast("New Task Received!", { icon: '🔔', duration: 5000 });
-      }
-
-      prevTaskCount.current = resTasks.data.length;
 
       setTasks(resTasks.data);
       setProjects(resProjects.data);
@@ -116,18 +138,17 @@ const Dashboard = () => {
       formData.append('description', taskDesc);
       formData.append('priority', priority);
       formData.append('assignedTo', assignedTo);
-      formData.append('projectId', selectedProjectId); // 🔥 NEW: Send Project ID
+      formData.append('projectId', selectedProjectId); // Send Project ID
       if (taskFile) formData.append('file', taskFile);
       
-      const { data } = await axios.post(`${API_BASE}/tasks`, formData, config);
+      await axios.post(`${API_BASE}/tasks`, formData, config);
       
-      if (assignedTo === 'all') {
-          toast.success('Task Assigned to Everyone! 📢', { id: loadToast });
-      } else {
-          setTasks([...tasks, data]);
-          toast.success('Task Assigned Successfully!', { id: loadToast });
-      }
-      fetchData(currentUser.token); // Refresh immediately
+      // 🔥 NOTE: We do NOT need to manually setTasks here anymore.
+      // The Socket 'new-task' event will trigger and update the UI automatically.
+      
+      toast.success('Task Assigned!', { id: loadToast });
+      
+      // Reset Form
       setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); setSelectedProjectId('');
 
     } catch (error) {
@@ -161,7 +182,7 @@ const Dashboard = () => {
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    // 🔥 NEW: Check for Location
+    // Check for Location
     if (!projTitle || !projLocation || projFiles.length === 0) return toast.error('Title, Location and File required');
     
     const loadToast = toast.loading('Uploading Project...');
@@ -170,7 +191,7 @@ const Dashboard = () => {
       const formData = new FormData();
       formData.append('title', projTitle);
       formData.append('description', projDesc);
-      formData.append('location', projLocation); // 🔥 NEW: Send Location
+      formData.append('location', projLocation); // Send Location
       for (let i = 0; i < projFiles.length; i++) {
         formData.append('files', projFiles[i]);
       }
@@ -216,13 +237,16 @@ const Dashboard = () => {
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
+    // Optimistic Update (Update UI instantly, revert if fail)
     setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
-    toast.success(`Status updated to ${newStatus}`);
+    
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.put(`${API_BASE}/tasks/${taskId}`, { status: newStatus }, config);
+      // Socket 'task-updated' will also fire, confirming the change
     } catch (error) {
-      fetchData(currentUser.token);
+      fetchData(currentUser.token); // Revert on error
+      toast.error("Update failed");
     }
   };
 
@@ -231,8 +255,9 @@ const Dashboard = () => {
     if (!message) return toast.error("Please type a message first");
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      const { data } = await axios.put(`${API_BASE}/tasks/${taskId}`, { employeeReply: message }, config);
-      setTasks(tasks.map(t => t._id === taskId ? data : t));
+      // We don't need to manually update state, socket will do it
+      await axios.put(`${API_BASE}/tasks/${taskId}`, { employeeReply: message }, config);
+      
       setReplyTexts({ ...replyTexts, [taskId]: '' });
       toast.success("Reply Sent to Admin!");
     } catch (error) {
@@ -246,7 +271,7 @@ const Dashboard = () => {
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.delete(`${API_BASE}/tasks/${id}`, config);
-      setTasks(tasks.filter(t => t._id !== id)); 
+      // Socket 'task-deleted' will remove it from the list automatically
       toast.success('Task Deleted');
     } catch (error) {
       toast.error('Error deleting task');
@@ -275,21 +300,13 @@ const Dashboard = () => {
     setProjFiles(e.target.files); 
   };
   
-  // 🔥 UPDATED: Fix messy filenames (remove %20 etc.)
+  // Fix messy filenames (remove %20 etc.)
   const getFileName = (path) => {
     if (!path) return 'File';
-    
-    // 1. Get the filename from URL
     let serverFileName = path.split(/[/\\]/).pop(); 
-
-    // 2. Decode URL (Turn "My%20File.pdf" into "My File.pdf")
     try {
         serverFileName = decodeURIComponent(serverFileName);
-    } catch (e) {
-        // if decoding fails, just use the original
-    }
-
-    // 3. Truncate if too long
+    } catch (e) {}
     return serverFileName.length > 25 
       ? serverFileName.substring(0, 20) + '...' 
       : serverFileName;
@@ -323,7 +340,7 @@ const Dashboard = () => {
                   <h3 className="mb-4 text-lg font-bold text-[#3E2723]">Assign New Task</h3>
                   <form onSubmit={handleCreateTask} className="flex flex-col gap-3">
                     
-                    {/* 🔥 NEW: Project Dropdown */}
+                    {/* Project Dropdown */}
                     <label className="text-xs font-bold text-[#5D4037] uppercase">Select Project (Optional)</label>
                     <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-white text-[#3E2723] font-semibold">
                         <option value="">-- No Specific Project --</option>
@@ -382,7 +399,7 @@ const Dashboard = () => {
                     <div className={`absolute top-0 left-0 w-1 h-full rounded-l ${task.status === 'Completed' ? 'bg-[#33691E]' : task.status === 'In Progress' ? 'bg-[#F57F17]' : 'bg-[#D32F2F]'}`}></div>
                     {isAdmin && (<button onClick={() => handleDeleteTask(task._id)} className="absolute top-2 right-2 text-[#A1887F] hover:text-[#D32F2F] font-bold" title="Delete Task">🗑️</button>)}
                     <div>
-                      {/* 🔥 NEW: Show Project Name if linked */}
+                      {/* Show Project Name if linked */}
                       {task.project && (
                           <div className="text-xs font-bold text-[#BF360C] uppercase tracking-wide mb-1">
                               🏗️ {task.project.title} <span className="text-[#8D6E63]">({task.project.location})</span>
@@ -426,7 +443,7 @@ const Dashboard = () => {
                   <label className="text-xs font-bold text-[#5D4037]">Project Name</label>
                   <input type="text" placeholder="e.g. City Center Mall" className="p-2 border border-[#A1887F] rounded bg-white" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
                   
-                  {/* 🔥 NEW: Project Location Input */}
+                  {/* Project Location Input */}
                   <label className="text-xs font-bold text-[#5D4037]">Location / Site</label>
                   <input type="text" placeholder="e.g. Mumbai, Site B" className="p-2 border border-[#A1887F] rounded bg-white" value={projLocation} onChange={(e) => setProjLocation(e.target.value)} />
 
@@ -449,7 +466,7 @@ const Dashboard = () => {
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <h3 className="font-bold text-lg text-[#3E2723]">{proj.title}</h3>
-                            {/* 🔥 NEW: Show Location in Project List */}
+                            {/* Show Location in Project List */}
                             <p className="text-xs font-bold text-[#BF360C]">📍 {proj.location}</p>
                           </div>
                           {/* Everyone can delete */}

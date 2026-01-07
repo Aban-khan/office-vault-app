@@ -16,8 +16,7 @@ const createTask = async (req, res) => {
       filePath = req.file.path; 
     }
 
-    // 🔥 FIX: Handle empty Project ID
-    // If projectId is an empty string "" (from "No Specific Project"), set it to null.
+    // Handle empty Project ID (Prevent database crash)
     const validProject = (projectId && projectId.trim() !== "") ? projectId : null;
 
     // --- BULK ASSIGNMENT LOGIC (All Employees) ---
@@ -34,13 +33,16 @@ const createTask = async (req, res) => {
         description,
         priority,
         assignedTo: employee._id, 
-        project: validProject, // <--- Use the safe variable
+        project: validProject, 
         file: filePath,
         status: 'Pending',
         employeeReply: ''
       }));
 
-      await Task.insertMany(tasksToCreate);
+      const createdTasks = await Task.insertMany(tasksToCreate);
+
+      // 🔥 SOCKET: Notify everyone that "Bulk Tasks" happened
+      req.io.emit('bulk-task-created', { count: createdTasks.length });
 
       return res.status(201).json({ message: 'Task assigned to ALL employees successfully', isBulk: true });
     }
@@ -51,7 +53,7 @@ const createTask = async (req, res) => {
       description,
       priority,
       assignedTo,
-      project: validProject, // <--- Use the safe variable
+      project: validProject, 
       file: filePath,
     });
 
@@ -62,10 +64,14 @@ const createTask = async (req, res) => {
         await task.populate('project', 'title location'); 
     }
 
+    // 🔥 SOCKET: Emit the "new-task" event instantly!
+    // This sends the specific task data to the frontend immediately.
+    req.io.emit('new-task', task);
+
     res.status(201).json(task);
 
   } catch (error) {
-    console.error("Create Task Error:", error); // Log error for debugging
+    console.error("Create Task Error:", error); 
     res.status(400).json({ message: error.message });
   }
 };
@@ -117,6 +123,9 @@ const updateTask = async (req, res) => {
         await updatedTask.populate('project', 'title location');
     }
     
+    // 🔥 SOCKET: Notify Admin (and user) that the task status changed
+    req.io.emit('task-updated', updatedTask);
+
     res.json(updatedTask);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -130,7 +139,12 @@ const deleteTask = async (req, res) => {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
     
+    const deletedId = task._id; // Save ID to send via socket
     await task.deleteOne();
+
+    // 🔥 SOCKET: Tell frontend to remove this specific task ID
+    req.io.emit('task-deleted', deletedId);
+
     res.json({ message: 'Task removed' });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -1,19 +1,20 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { io } from 'socket.io-client'; // 🔥 IMPORT SOCKET
+import { io } from 'socket.io-client';
+import { useQuery, useQueryClient } from '@tanstack/react-query'; 
+// 🔥 UI IMPORTS
+import { motion, AnimatePresence } from 'framer-motion'; 
+import { FaTasks, FaProjectDiagram, FaUserTie, FaSignOutAlt, FaPlus, FaTrash, FaCheck, FaTimes, FaFileAlt, FaPaperPlane } from 'react-icons/fa'; 
+import BuildingLoader from '../components/BuildingLoader'; 
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState(null);
+  const queryClient = useQueryClient(); 
+  
+  const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('userInfo')));
   const [activeTab, setActiveTab] = useState('tasks');
-
-  // DATA
-  const [tasks, setTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [pendingUsers, setPendingUsers] = useState([]); 
 
   // FORMS - TASKS
   const [taskTitle, setTaskTitle] = useState('');
@@ -28,109 +29,96 @@ const Dashboard = () => {
   const [projLocation, setProjLocation] = useState('');
   const [projDesc, setProjDesc] = useState('');
   const [projFiles, setProjFiles] = useState([]); 
-
   const [replyTexts, setReplyTexts] = useState({});
 
   const API_BASE = 'https://office-vault-app.onrender.com/api';
-
-  // 🔥 SOCKET CONNECTION REF
   const socketRef = useRef(null);
 
+  // --- 1. REACT QUERY FETCHING (Updated with isLoading) ---
+  const { data: tasks = [], isLoading: loadingTasks } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_BASE}/tasks`, {
+        headers: { Authorization: `Bearer ${currentUser.token}` }
+      });
+      return data;
+    },
+    enabled: !!currentUser,
+  });
+
+  const { data: projects = [], isLoading: loadingProjects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_BASE}/projects`, {
+        headers: { Authorization: `Bearer ${currentUser.token}` }
+      });
+      return data;
+    },
+    enabled: !!currentUser,
+  });
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_BASE}/users`, {
+        headers: { Authorization: `Bearer ${currentUser.token}` }
+      });
+      return data;
+    },
+    enabled: !!currentUser && currentUser?.role === 'admin',
+  });
+
+  const { data: pendingUsers = [] } = useQuery({
+    queryKey: ['pendingUsers'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_BASE}/auth/pending`, {
+        headers: { Authorization: `Bearer ${currentUser.token}` }
+      });
+      return data;
+    },
+    enabled: !!currentUser && currentUser?.role === 'admin',
+  });
+
+
+  // --- 2. SOCKET SETUP ---
   useEffect(() => {
-    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-    if (!userInfo) {
-      navigate('/');
-    } else {
-      setCurrentUser(userInfo);
-      fetchData(userInfo.token);
-      
-      // Request Notification Permission on Load
-      if (Notification.permission !== 'granted') {
-        Notification.requestPermission();
+    if (!currentUser) { navigate('/'); return; }
+    if (Notification.permission !== 'granted') Notification.requestPermission();
+
+    socketRef.current = io('https://office-vault-app.onrender.com');
+
+    socketRef.current.on('new-task', (newTask) => {
+      if (currentUser.role === 'admin' || newTask.assignedTo._id === currentUser._id) {
+          queryClient.setQueryData(['tasks'], (oldTasks = []) => [newTask, ...oldTasks]);
+          toast.success("🚀 New Task Assigned!", { icon: '🔔' });
+          new Notification("Highrise Vault", { body: `New Task: ${newTask.title}`, icon: "/logo192.png" });
       }
+    });
 
-      // --- 🔌 SOCKET SETUP ---
-      // 1. Connect to the Backend Root URL (remove /api)
-      socketRef.current = io('https://office-vault-app.onrender.com');
+    socketRef.current.on('bulk-task-created', () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }); 
+        toast("📢 Bulk Tasks Assigned!");
+    });
 
-      // 2. LISTEN: New Task Created
-      socketRef.current.on('new-task', (newTask) => {
-        // Show if Admin OR if assigned to me
-        if (userInfo.role === 'admin' || newTask.assignedTo._id === userInfo._id) {
-            setTasks((prev) => [newTask, ...prev]); // Add to top
-            
-            toast("🚀 New Task Assigned!", { duration: 4000, icon: '🔔' });
-            
-            new Notification("Highrise Vault", { 
-               body: `New Task: ${newTask.title}`, 
-               icon: "/logo192.png" 
-            });
-        }
-      });
+    socketRef.current.on('task-deleted', (deletedId) => {
+        queryClient.setQueryData(['tasks'], (oldTasks = []) => oldTasks.filter(t => t._id !== deletedId));
+    });
+    
+    socketRef.current.on('task-updated', (updatedTask) => {
+         queryClient.setQueryData(['tasks'], (oldTasks = []) => oldTasks.map(t => t._id === updatedTask._id ? updatedTask : t));
+    });
 
-      // 3. LISTEN: Bulk Tasks (Assigned to All)
-      socketRef.current.on('bulk-task-created', () => {
-          fetchData(userInfo.token, true); // Refresh list
-          toast("📢 Bulk Tasks Assigned to Everyone!");
-      });
+    return () => { if (socketRef.current) socketRef.current.disconnect(); };
+  }, [navigate, currentUser, queryClient]);
 
-      // 4. LISTEN: Task Deleted
-      socketRef.current.on('task-deleted', (deletedId) => {
-          setTasks((prev) => prev.filter(t => t._id !== deletedId));
-      });
-      
-      // 5. LISTEN: Task Updated (Status or Reply)
-      socketRef.current.on('task-updated', (updatedTask) => {
-           setTasks((prev) => prev.map(t => t._id === updatedTask._id ? updatedTask : t));
-      });
-
-      // Cleanup: Disconnect socket when leaving dashboard
-      return () => {
-          if (socketRef.current) socketRef.current.disconnect();
-      };
-    }
-  }, [navigate]);
-
-  const fetchData = async (token, isAutoRefresh = false) => {
-    try {
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-      
-      const reqTasks = axios.get(`${API_BASE}/tasks`, config);
-      const reqProjects = axios.get(`${API_BASE}/projects`, config);
-      
-      let reqUsers = Promise.resolve({ data: [] });
-      let reqPending = Promise.resolve({ data: [] });
-
-      if (userInfo.role === 'admin') {
-          reqUsers = axios.get(`${API_BASE}/users`, config); 
-          reqPending = axios.get(`${API_BASE}/auth/pending`, config); 
-      }
-
-      const [resTasks, resProjects, resUsers, resPending] = await Promise.all([
-        reqTasks, reqProjects, reqUsers, reqPending
-      ]);
-
-      setTasks(resTasks.data);
-      setProjects(resProjects.data);
-      if (userInfo.role === 'admin') {
-          setEmployees(resUsers.data);
-          setPendingUsers(resPending.data);
-      }
-    } catch (error) {
-      if (!isAutoRefresh) console.error('Error fetching data', error);
-    }
-  };
 
   // --- HANDLERS ---
+  const getErrorMsg = (error) => error.response?.data?.message || error.message || "Something went wrong";
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!taskTitle) return toast.error('Task Title is required');
-    if (!assignedTo) return toast.error('Please select an employee'); 
-
+    if (!taskTitle || !assignedTo) return toast.error('Fields required'); 
     const loadToast = toast.loading('Assigning Task...');
-
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       const formData = new FormData();
@@ -138,250 +126,233 @@ const Dashboard = () => {
       formData.append('description', taskDesc);
       formData.append('priority', priority);
       formData.append('assignedTo', assignedTo);
-      formData.append('projectId', selectedProjectId); // Send Project ID
+      formData.append('projectId', selectedProjectId); 
       if (taskFile) formData.append('file', taskFile);
       
       await axios.post(`${API_BASE}/tasks`, formData, config);
-      
-      // 🔥 NOTE: We do NOT need to manually setTasks here anymore.
-      // The Socket 'new-task' event will trigger and update the UI automatically.
-      
       toast.success('Task Assigned!', { id: loadToast });
-      
-      // Reset Form
       setTaskTitle(''); setTaskDesc(''); setTaskFile(null); setAssignedTo(''); setSelectedProjectId('');
-
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to create task', { id: loadToast });
-    }
+    } catch (error) { toast.error(getErrorMsg(error), { id: loadToast }); }
   };
 
   const handleApproveUser = async (id) => {
     try {
-        const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        await axios.put(`${API_BASE}/auth/approve/${id}`, {}, config);
+        await axios.put(`${API_BASE}/auth/approve/${id}`, {}, { headers: { Authorization: `Bearer ${currentUser.token}` } });
         toast.success('User Approved!');
-        fetchData(currentUser.token); 
-    } catch (error) {
-        toast.error('Error approving user');
-    }
+        queryClient.invalidateQueries({ queryKey: ['pendingUsers'] }); 
+        queryClient.invalidateQueries({ queryKey: ['employees'] });    
+    } catch (error) { toast.error(getErrorMsg(error)); }
   };
 
   const handleRejectUser = async (id) => {
-    if(!window.confirm("Reject and delete this user request?")) return;
+    if(!window.confirm("Reject user?")) return;
     try {
-        const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        await axios.delete(`${API_BASE}/auth/reject/${id}`, config);
+        await axios.delete(`${API_BASE}/auth/reject/${id}`, { headers: { Authorization: `Bearer ${currentUser.token}` } });
         toast.success('User Rejected');
-        fetchData(currentUser.token);
-    } catch (error) {
-        toast.error('Error rejecting user');
-    }
+        queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
+    } catch (error) { toast.error(getErrorMsg(error)); }
   };
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    // Check for Location
-    if (!projTitle || !projLocation || projFiles.length === 0) return toast.error('Title, Location and File required');
-    
-    const loadToast = toast.loading('Uploading Project...');
+    if (!projTitle || !projLocation || projFiles.length === 0) return toast.error('Data required');
+    const loadToast = toast.loading('Uploading...');
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       const formData = new FormData();
       formData.append('title', projTitle);
       formData.append('description', projDesc);
-      formData.append('location', projLocation); // Send Location
-      for (let i = 0; i < projFiles.length; i++) {
-        formData.append('files', projFiles[i]);
-      }
-      const { data } = await axios.post(`${API_BASE}/projects`, formData, config);
-      setProjects([data, ...projects]); 
+      formData.append('location', projLocation); 
+      for (let i = 0; i < projFiles.length; i++) { formData.append('files', projFiles[i]); }
+      
+      await axios.post(`${API_BASE}/projects`, formData, config);
+      queryClient.invalidateQueries({ queryKey: ['projects'] }); 
       setProjTitle(''); setProjDesc(''); setProjLocation(''); setProjFiles([]); 
       document.getElementById('project-file-input').value = ""; 
       toast.success('Project Submitted!', { id: loadToast });
-    } catch (error) {
-      toast.error('Error submitting project', { id: loadToast });
-    }
+    } catch (error) { toast.error(getErrorMsg(error), { id: loadToast }); }
   };
 
   const handleAddFileToProject = async (projectId, e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const loadToast = toast.loading('Adding File...');
-    
     const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
-    }
+    for (let i = 0; i < files.length; i++) { formData.append('files', files[i]); }
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      const { data } = await axios.put(`${API_BASE}/projects/${projectId}/add`, formData, config);
-      setProjects(projects.map(p => p._id === projectId ? data : p));
+      await axios.put(`${API_BASE}/projects/${projectId}/add`, formData, config);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('File added!', { id: loadToast });
-    } catch (error) {
-      toast.error('Error adding file', { id: loadToast });
-    }
+    } catch (error) { toast.error(getErrorMsg(error), { id: loadToast }); }
   };
 
   const handleDeleteFile = async (projectId, filePath) => {
-    if(!window.confirm("Delete this specific file?")) return;
+    if(!window.confirm("Delete file?")) return;
     try {
         const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-        const { data } = await axios.put(`${API_BASE}/projects/${projectId}/remove-file`, { filePath }, config);
-        setProjects(projects.map(p => p._id === projectId ? data : p));
+        await axios.put(`${API_BASE}/projects/${projectId}/remove-file`, { filePath }, config);
+        queryClient.invalidateQueries({ queryKey: ['projects'] });
         toast.success('File deleted');
-    } catch (error) {
-        toast.error('Failed to delete file');
-    }
+    } catch (error) { toast.error(getErrorMsg(error)); }
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
-    // Optimistic Update (Update UI instantly, revert if fail)
-    setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
-    
+    queryClient.setQueryData(['tasks'], (old) => old.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.put(`${API_BASE}/tasks/${taskId}`, { status: newStatus }, config);
-      // Socket 'task-updated' will also fire, confirming the change
-    } catch (error) {
-      fetchData(currentUser.token); // Revert on error
-      toast.error("Update failed");
+    } catch (error) { 
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        toast.error(getErrorMsg(error)); 
     }
   };
 
   const handleSendReply = async (taskId) => {
     const message = replyTexts[taskId];
-    if (!message) return toast.error("Please type a message first");
+    if (!message) return toast.error("Type a message");
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
-      // We don't need to manually update state, socket will do it
       await axios.put(`${API_BASE}/tasks/${taskId}`, { employeeReply: message }, config);
-      
       setReplyTexts({ ...replyTexts, [taskId]: '' });
-      toast.success("Reply Sent to Admin!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to send reply");
-    }
+      toast.success("Reply Sent!");
+    } catch (error) { toast.error(getErrorMsg(error)); }
   };
 
   const handleDeleteTask = async (id) => {
-    if(!window.confirm("Delete this task?")) return;
+    if(!window.confirm("Delete task?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.delete(`${API_BASE}/tasks/${id}`, config);
-      // Socket 'task-deleted' will remove it from the list automatically
       toast.success('Task Deleted');
-    } catch (error) {
-      toast.error('Error deleting task');
-    }
+    } catch (error) { toast.error(getErrorMsg(error)); }
   };
 
   const handleDeleteProject = async (id) => {
-    if(!window.confirm("Delete this ENTIRE project?")) return;
+    if(!window.confirm("Delete project?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${currentUser.token}` } };
       await axios.delete(`${API_BASE}/projects/${id}`, config);
-      setProjects(projects.filter(p => p._id !== id)); 
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project Deleted');
-    } catch (error) {
-      toast.error('Error deleting project');
-    }
+    } catch (error) { toast.error(getErrorMsg(error)); }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('userInfo');
     navigate('/');
-    toast('Logged out successfully', { icon: '👋' });
+    toast('Logged out', { icon: '👋' });
   };
 
-  const handleFileSelect = (e) => {
-    setProjFiles(e.target.files); 
-  };
+  const handleFileSelect = (e) => { setProjFiles(e.target.files); };
   
-  // Fix messy filenames (remove %20 etc.)
   const getFileName = (path) => {
     if (!path) return 'File';
     let serverFileName = path.split(/[/\\]/).pop(); 
-    try {
-        serverFileName = decodeURIComponent(serverFileName);
-    } catch (e) {}
-    return serverFileName.length > 25 
-      ? serverFileName.substring(0, 20) + '...' 
-      : serverFileName;
+    try { serverFileName = decodeURIComponent(serverFileName); } catch (e) {}
+    return serverFileName.length > 25 ? serverFileName.substring(0, 20) + '...' : serverFileName;
   };
 
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <div className="min-h-screen bg-[#EFEBE9]">
-      <nav className="p-4 text-white bg-[#3E2723] shadow-md">
+    <div className="min-h-screen bg-[#F5F7FA] text-gray-800 font-sans">
+      {/* --- NAVBAR --- */}
+      <nav className="p-4 bg-white shadow-sm border-b border-gray-200">
         <div className="container flex justify-between items-center mx-auto">
-          <h1 className="text-xl font-bold font-serif tracking-wide">Highrise Vault</h1>
+          <h1 className="text-xl font-bold tracking-tight text-indigo-900 flex items-center gap-2">
+            <span className="text-2xl">🏢</span> Highrise Vault
+          </h1>
           <div className="flex items-center gap-4">
-            <span className="font-semibold text-[#D7CCC8]">{isAdmin ? '👑 Admin: ' : '👤 Staff: '} {currentUser?.name}</span>
-            <button onClick={handleLogout} className="px-3 py-1 text-sm bg-[#B71C1C] rounded hover:bg-[#C62828] transition-colors border border-[#D32F2F]">Logout</button>
+            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              {isAdmin ? <FaUserTie className="text-indigo-600"/> : <FaUserTie className="text-emerald-600"/>}
+              <span className="font-semibold">{currentUser?.name}</span>
+            </div>
+            <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-1 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors border border-red-200">
+              <FaSignOutAlt /> Logout
+            </button>
           </div>
         </div>
       </nav>
 
-      <div className="container p-6 mx-auto">
-        <div className="flex mb-6 border-b-2 border-[#D7CCC8]">
-          <button className={`px-6 py-2 font-bold ${activeTab === 'tasks' ? 'text-[#3E2723] border-b-4 border-[#3E2723]' : 'text-[#8D6E63]'}`} onClick={() => setActiveTab('tasks')}>📋 Tasks</button>
-          <button className={`px-6 py-2 font-bold ${activeTab === 'projects' ? 'text-[#BF360C] border-b-4 border-[#BF360C]' : 'text-[#8D6E63]'}`} onClick={() => setActiveTab('projects')}>🚀 Projects</button>
+      <div className="container p-6 mx-auto max-w-7xl">
+        {/* --- TABS --- */}
+        <div className="flex gap-4 mb-8">
+          <button 
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'tasks' ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-white text-gray-500 hover:bg-gray-50'}`} 
+            onClick={() => setActiveTab('tasks')}
+          >
+            <FaTasks /> Tasks
+          </button>
+          <button 
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'projects' ? 'bg-emerald-600 text-white shadow-emerald-200' : 'bg-white text-gray-500 hover:bg-gray-50'}`} 
+            onClick={() => setActiveTab('projects')}
+          >
+            <FaProjectDiagram /> Projects
+          </button>
         </div>
 
         {activeTab === 'tasks' && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+            
+            {/* SIDEBAR (Forms & Requests) */}
             {isAdmin && (
-              <div className="space-y-6 lg:col-span-1">
-                <div className="p-6 bg-[#FFF8E7] rounded shadow-md border border-[#D7CCC8]">
-                  <h3 className="mb-4 text-lg font-bold text-[#3E2723]">Assign New Task</h3>
-                  <form onSubmit={handleCreateTask} className="flex flex-col gap-3">
+              <div className="lg:col-span-4 space-y-6">
+                {/* Create Task Form */}
+                <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <h3 className="mb-4 text-lg font-bold text-gray-800 flex items-center gap-2"><FaPlus className="text-indigo-500"/> Assign New Task</h3>
+                  <form onSubmit={handleCreateTask} className="flex flex-col gap-4">
                     
-                    {/* Project Dropdown */}
-                    <label className="text-xs font-bold text-[#5D4037] uppercase">Select Project (Optional)</label>
-                    <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-white text-[#3E2723] font-semibold">
-                        <option value="">-- No Specific Project --</option>
-                        {projects.map(p => (
-                            <option key={p._id} value={p._id}>{p.title} ({p.location})</option>
-                        ))}
-                    </select>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Project Link</label>
+                        <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="w-full mt-1 p-2.5 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none transition-all text-sm">
+                            <option value="">-- No Specific Project --</option>
+                            {projects.map(p => (
+                                <option key={p._id} value={p._id}>{p.title}</option>
+                            ))}
+                        </select>
+                    </div>
 
-                    <label className="text-xs font-bold text-[#5D4037] uppercase">Task Details</label>
-                    <input type="text" placeholder="Title" className="p-2 border border-[#A1887F] rounded bg-white" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
-                    <input type="text" placeholder="Description" className="p-2 border border-[#A1887F] rounded bg-white" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Details</label>
+                        <input type="text" placeholder="Task Title" className="w-full mt-1 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none text-sm" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+                        <input type="text" placeholder="Short description..." className="w-full mt-2 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none text-sm" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
+                    </div>
                     
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-white text-[#3E2723]">
-                        <option value="Low">Low Priority</option>
-                        <option value="Medium">Medium Priority</option>
-                        <option value="High">High Priority</option>
-                    </select>
+                    <div className="grid grid-cols-2 gap-3">
+                        <select value={priority} onChange={(e) => setPriority(e.target.value)} className="p-2.5 border border-gray-300 rounded-lg bg-white text-sm">
+                            <option value="Low">Low Priority</option>
+                            <option value="Medium">Medium Priority</option>
+                            <option value="High">High Priority</option>
+                        </select>
+                        <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2.5 border border-gray-300 rounded-lg bg-indigo-50 font-semibold text-indigo-700 text-sm">
+                            <option value="">Select Employee</option>
+                            <option value="all">📢 ALL STAFF</option> 
+                            {employees.map(e => (<option key={e._id} value={e._id}>{e.name}</option>))}
+                        </select>
+                    </div>
                     
-                    <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="p-2 border border-[#A1887F] rounded bg-[#EFEBE9] font-bold text-[#3E2723]">
-                        <option value="">-- Select Employee --</option>
-                        <option value="all">📢 ALL EMPLOYEES</option> 
-                        {employees.map(e => (<option key={e._id} value={e._id}>{e.name}</option>))}
-                    </select>
+                    <input type="file" className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" onChange={(e) => setTaskFile(e.target.files[0])} />
                     
-                    <input type="file" className="text-sm text-[#5D4037]" onChange={(e) => setTaskFile(e.target.files[0])} />
-                    <button className="py-2 text-white bg-[#33691E] rounded hover:bg-[#558B2F] font-bold shadow-sm">Create Task</button>
+                    <button className="w-full py-2.5 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 font-bold shadow-md shadow-indigo-200 transition-all active:scale-95">
+                      Assign Task
+                    </button>
                   </form>
                 </div>
 
-                <div className="p-6 mt-6 bg-[#FFF8E7] rounded shadow-md border-t-4 border-[#BF360C]">
-                  <h3 className="mb-4 text-lg font-bold text-[#3E2723]">🔔 Pending Requests</h3>
+                {/* Pending Users */}
+                <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <h3 className="mb-4 text-lg font-bold text-gray-800">🔔 Pending Approvals</h3>
                   {pendingUsers.length === 0 ? (
-                      <p className="text-sm text-[#8D6E63]">No new signups.</p>
+                      <p className="text-sm text-gray-400 italic">No new signups.</p>
                   ) : (
                       <ul className="space-y-3">
                           {pendingUsers.map(user => (
-                              <li key={user._id} className="flex justify-between items-center bg-[#EFEBE9] p-2 rounded border border-[#D7CCC8]">
-                                  <div><p className="text-sm font-bold text-[#3E2723]">{user.name}</p><p className="text-xs text-[#5D4037]">{user.email}</p></div>
+                              <li key={user._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                  <div><p className="text-sm font-bold text-gray-800">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div>
                                   <div className="flex gap-2">
-                                      <button onClick={() => handleApproveUser(user._id)} className="text-[#2E7D32] font-bold text-lg" title="Approve">✅</button>
-                                      <button onClick={() => handleRejectUser(user._id)} className="text-[#C62828] font-bold text-lg" title="Reject">❌</button>
+                                      <button onClick={() => handleApproveUser(user._id)} className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200"><FaCheck/></button>
+                                      <button onClick={() => handleRejectUser(user._id)} className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200"><FaTimes/></button>
                                   </div>
                               </li>
                           ))}
@@ -391,109 +362,175 @@ const Dashboard = () => {
               </div>
             )}
             
-            <div className={isAdmin ? "lg:col-span-2" : "lg:col-span-3"}>
-              <h2 className="mb-6 text-2xl font-bold text-[#3E2723] font-serif">Task Board</h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* TASK BOARD (Main Area) */}
+            <div className={isAdmin ? "lg:col-span-8" : "lg:col-span-12"}>
+              <h2 className="mb-6 text-2xl font-bold text-gray-800">Active Tasks</h2>
+              
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                {/* 🔥 CUSTOM BUILDING LOADER */}
+                {loadingTasks && (
+                   <div className="col-span-full">
+                      <BuildingLoader />
+                   </div>
+                )}
+
+                {/* 🔥 TASKS LIST */}
+                <AnimatePresence>
                 {tasks.map(task => (
-                  <div key={task._id} className="relative p-4 bg-[#FFF8E7] border border-[#D7CCC8] rounded shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-                    <div className={`absolute top-0 left-0 w-1 h-full rounded-l ${task.status === 'Completed' ? 'bg-[#33691E]' : task.status === 'In Progress' ? 'bg-[#F57F17]' : 'bg-[#D32F2F]'}`}></div>
-                    {isAdmin && (<button onClick={() => handleDeleteTask(task._id)} className="absolute top-2 right-2 text-[#A1887F] hover:text-[#D32F2F] font-bold" title="Delete Task">🗑️</button>)}
+                  <motion.div 
+                    key={task._id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="relative p-5 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group"
+                  >
+                    {/* Priority Indicator Line */}
+                    <div className={`absolute top-0 left-0 w-1.5 h-full rounded-l-xl ${task.status === 'Completed' ? 'bg-green-500' : task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-orange-400' : 'bg-blue-400'}`}></div>
+                    
+                    {isAdmin && (<button onClick={() => handleDeleteTask(task._id)} className="absolute top-3 right-3 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><FaTrash /></button>)}
+                    
                     <div>
-                      {/* Show Project Name if linked */}
                       {task.project && (
-                          <div className="text-xs font-bold text-[#BF360C] uppercase tracking-wide mb-1">
-                              🏗️ {task.project.title} <span className="text-[#8D6E63]">({task.project.location})</span>
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 mb-2 uppercase tracking-wide">
+                              <FaProjectDiagram /> {task.project.title}
                           </div>
                       )}
-                      <h3 className="font-bold mr-6 text-[#3E2723]">{task.title}</h3>
-                      <p className="text-sm text-[#5D4037]">{task.description}</p>
-                      {task.file && <a href={task.file} target="_blank" rel="noreferrer" className="text-[#1565C0] text-sm block mt-1 hover:underline">📎 Attachment</a>}
-                    </div>
-                    <div className="mt-4">
-                      <div className="text-xs mb-2"><span className="font-bold text-[#8D6E63]">ASSIGNED TO:</span> <span className="text-[#3E2723] font-bold">{task.assignedTo?.name}</span></div>
-                      {isAdmin ? (
-                          <div className={`w-full p-2 text-center rounded text-sm font-bold border ${task.status === 'Completed' ? 'bg-[#DCEDC8] text-[#33691E] border-[#C5E1A5]' : task.status === 'In Progress' ? 'bg-[#FFF9C4] text-[#F57F17] border-[#FFF59D]' : 'bg-[#FFCDD2] text-[#B71C1C] border-[#EF9A9A]'}`}>Status: {task.status || 'Pending'}</div>
-                      ) : (
-                        <select value={task.status||'Pending'} onChange={(e)=>handleStatusChange(task._id, e.target.value)} className="w-full text-sm border border-[#A1887F] rounded p-1 font-bold bg-white text-[#3E2723]"><option>Pending</option><option>In Progress</option><option>Completed</option></select>
+                      <h3 className="font-bold text-gray-800 text-lg leading-tight mb-1">{task.title}</h3>
+                      <p className="text-sm text-gray-500 line-clamp-2">{task.description}</p>
+                      
+                      {task.file && (
+                        <a href={task.file} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1.5 rounded hover:bg-blue-100 transition-colors">
+                          <FaFileAlt /> View Attachment
+                        </a>
                       )}
-                      <div className="mt-3 border-t border-[#D7CCC8] pt-2">
-                        {isAdmin && (<div className="bg-[#EFEBE9] p-2 rounded border border-[#D7CCC8]"><span className="text-xs font-bold text-[#5D4037] block">Message from Staff:</span><p className="text-sm text-[#3E2723] italic">{task.employeeReply || "No message."}</p></div>)}
-                        {!isAdmin && (
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-bold text-[#5D4037]">Message to Admin:</label>
-                                <textarea className="w-full p-2 border border-[#A1887F] rounded text-sm bg-white" rows="2" placeholder="Type update here..." value={replyTexts[task._id] || ''} onChange={(e) => setReplyTexts({ ...replyTexts, [task._id]: e.target.value })} />
-                                <button onClick={() => handleSendReply(task._id)} className="self-end bg-[#5D4037] text-white text-xs px-3 py-1 rounded hover:bg-[#4E342E]">Send Msg</button>
+                    </div>
+
+                    <div className="mt-5 pt-4 border-t border-gray-100">
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600">
+                                {task.assignedTo?.name?.[0] || "?"}
+                            </div>
+                            <span>{task.assignedTo?.name}</span>
+                        </div>
+                      </div>
+
+                      {isAdmin ? (
+                          <div className={`w-full py-1.5 text-center rounded text-xs font-bold border ${task.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' : task.status === 'In Progress' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                            {task.status || 'Pending'}
+                          </div>
+                      ) : (
+                        <select 
+                            value={task.status||'Pending'} 
+                            onChange={(e)=>handleStatusChange(task._id, e.target.value)} 
+                            className={`w-full py-1.5 px-2 rounded text-xs font-bold border cursor-pointer outline-none ${task.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-gray-700 border-gray-300'}`}
+                        >
+                            <option>Pending</option>
+                            <option>In Progress</option>
+                            <option>Completed</option>
+                        </select>
+                      )}
+
+                      {/* Chat / Reply Section */}
+                      <div className="mt-3">
+                        {isAdmin ? (
+                             task.employeeReply && (
+                                <div className="bg-gray-50 p-2 rounded text-xs text-gray-600 border border-gray-200">
+                                    <span className="font-bold text-gray-800">Reply:</span> {task.employeeReply}
+                                </div>
+                             )
+                        ) : (
+                            <div className="relative">
+                                <input 
+                                    className="w-full pl-2 pr-8 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-indigo-300 outline-none" 
+                                    placeholder="Reply to admin..." 
+                                    value={replyTexts[task._id] || ''} 
+                                    onChange={(e) => setReplyTexts({ ...replyTexts, [task._id]: e.target.value })} 
+                                />
+                                <button onClick={() => handleSendReply(task._id)} className="absolute right-1 top-1 text-indigo-600 p-1 hover:text-indigo-800"><FaPaperPlane size={12}/></button>
                             </div>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
+                </AnimatePresence>
+
+                {!loadingTasks && tasks.length === 0 && (
+                    <div className="col-span-full text-center py-10 text-gray-400">
+                        <p>No active tasks found.</p>
+                    </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
+        {/* --- PROJECTS TAB --- */}
         {activeTab === 'projects' && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-1">
-              <div className="p-6 bg-[#FFF8E7] rounded shadow-md border-t-4 border-[#BF360C]">
-                <h3 className="mb-4 text-lg font-bold text-[#3E2723]">🚀 Submit New Project</h3>
-                <form onSubmit={handleCreateProject} className="flex flex-col gap-3">
-                  <label className="text-xs font-bold text-[#5D4037]">Project Name</label>
-                  <input type="text" placeholder="e.g. City Center Mall" className="p-2 border border-[#A1887F] rounded bg-white" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
-                  
-                  {/* Project Location Input */}
-                  <label className="text-xs font-bold text-[#5D4037]">Location / Site</label>
-                  <input type="text" placeholder="e.g. Mumbai, Site B" className="p-2 border border-[#A1887F] rounded bg-white" value={projLocation} onChange={(e) => setProjLocation(e.target.value)} />
-
-                  <label className="text-xs font-bold text-[#5D4037]">Details</label>
-                  <textarea rows="3" placeholder="Description..." className="p-2 border border-[#A1887F] rounded bg-white" value={projDesc} onChange={(e) => setProjDesc(e.target.value)} />
-                  <label className="text-xs font-bold text-[#5D4037]">Initial Files</label>
-                  <input id="project-file-input" type="file" className="text-sm text-[#5D4037]" multiple onChange={handleFileSelect} />
-                  <button className="py-2 mt-2 text-white bg-[#BF360C] rounded hover:bg-[#D84315] font-bold">Submit Project</button>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+            <div className="lg:col-span-4">
+              <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100 sticky top-4">
+                <h3 className="mb-4 text-lg font-bold text-gray-800 flex items-center gap-2"><FaPlus className="text-emerald-500"/> New Project</h3>
+                <form onSubmit={handleCreateProject} className="flex flex-col gap-4">
+                  <input type="text" placeholder="Project Name" className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-200 outline-none text-sm" value={projTitle} onChange={(e) => setProjTitle(e.target.value)} />
+                  <input type="text" placeholder="Location / Site" className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-200 outline-none text-sm" value={projLocation} onChange={(e) => setProjLocation(e.target.value)} />
+                  <textarea rows="3" placeholder="Description..." className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-200 outline-none text-sm" value={projDesc} onChange={(e) => setProjDesc(e.target.value)} />
+                  <input id="project-file-input" type="file" className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" multiple onChange={handleFileSelect} />
+                  <button className="w-full py-2.5 text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 font-bold shadow-md shadow-emerald-200 transition-all active:scale-95">Submit Project</button>
                 </form>
               </div>
             </div>
-            <div className="lg:col-span-2">
-              <h2 className="mb-6 text-2xl font-bold text-[#3E2723] font-serif">Project Submissions</h2>
-              <div className="project-list-container">
-                {projects.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#8D6E63', marginTop: '20px' }}>No projects uploaded yet.</p>
-                ) : (
-                    projects.map(proj => (
-                    <div key={proj._id} className="p-4 mb-4 bg-[#FFF8E7] border border-[#D7CCC8] rounded shadow-sm">
-                        <div className="flex justify-between items-start mb-2">
+            <div className="lg:col-span-8">
+              <h2 className="mb-6 text-2xl font-bold text-gray-800">Project Archive</h2>
+              <div className="space-y-4">
+                
+                {/* 🔥 CUSTOM BUILDING LOADER */}
+                {loadingProjects && <BuildingLoader />}
+                
+                <AnimatePresence>
+                {projects.map(proj => (
+                    <motion.div 
+                        key={proj._id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="p-6 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                    >
+                        <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-bold text-lg text-[#3E2723]">{proj.title}</h3>
-                            {/* Show Location in Project List */}
-                            <p className="text-xs font-bold text-[#BF360C]">📍 {proj.location}</p>
+                            <h3 className="font-bold text-xl text-gray-800">{proj.title}</h3>
+                            <p className="text-sm font-bold text-emerald-600 flex items-center gap-1">📍 {proj.location}</p>
                           </div>
-                          {/* Everyone can delete */}
-                          {isAdmin && (<button className="text-[#A1887F] hover:text-[#D32F2F] font-bold" onClick={() => handleDeleteProject(proj._id)} title="Delete Project">❌</button>)}
+                          {isAdmin && (<button className="text-gray-400 hover:text-red-500 transition-colors" onClick={() => handleDeleteProject(proj._id)}><FaTrash /></button>)}
                         </div>
-                        <div className="mb-4"><p className="text-sm text-[#5D4037]">{proj.description || "No description provided."}</p></div>
-                        <div className="flex flex-col gap-4">
+                        <p className="text-sm text-gray-600 mb-4">{proj.description || "No description provided."}</p>
+                        
+                        <div className="flex flex-col gap-3">
                           <div className="flex flex-wrap gap-2">
                             {proj.files && proj.files.map((file, index) => (
-                                <div key={index} className="flex items-center gap-2 border border-[#A1887F] rounded-full px-3 py-1 bg-[#EFEBE9] text-sm">
-                                    <a href={file} target="_blank" rel="noreferrer" className="no-underline text-[#3E2723] font-bold hover:text-[#BF360C]" title={getFileName(file)}>📄 {getFileName(file)}</a>
-                                    
-                                    {/* Trash bin for files */}
-                                    <button onClick={() => handleDeleteFile(proj._id, file)} className="text-[#C62828] font-bold hover:text-[#D32F2F] border-l border-[#D7CCC8] pl-2" title="Delete this file">✖</button>
-                                
+                                <div key={index} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50 text-sm hover:bg-gray-100 transition-colors">
+                                    <a href={file} target="_blank" rel="noreferrer" className="flex items-center gap-2 no-underline text-gray-700 font-medium" title={getFileName(file)}>
+                                        <FaFileAlt className="text-gray-400"/> {getFileName(file)}
+                                    </a>
+                                    <button onClick={() => handleDeleteFile(proj._id, file)} className="text-gray-400 hover:text-red-500 pl-2 border-l border-gray-300" title="Delete file"><FaTimes/></button>
                                 </div>
                             ))}
-                            <label htmlFor={`upload-${proj._id}`} className="cursor-pointer border-dashed border-2 border-[#A1887F] bg-white text-[#5D4037] px-3 py-1 rounded-full text-sm font-bold hover:bg-[#EFEBE9]">➕ Add File</label>
+                            <label htmlFor={`upload-${proj._id}`} className="cursor-pointer border border-dashed border-gray-300 bg-white text-gray-500 px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center gap-1"><FaPlus size={10}/> Add File</label>
                             <input id={`upload-${proj._id}`} type="file" multiple style={{ display: 'none' }} onChange={(e) => handleAddFileToProject(proj._id, e)} />
                           </div>
-                          <div className="w-full border-t border-[#D7CCC8] pt-2 text-xs text-[#8D6E63]">
-                              <strong>Submitted by:</strong> {proj.createdBy?.name || "Unknown"} 
-                              <span style={{float:'right'}}>{new Date(proj.createdAt).toLocaleDateString()}</span>
+                          <div className="w-full border-t border-gray-100 pt-3 flex justify-between items-center text-xs text-gray-400">
+                              <span>Submitted by: <span className="text-gray-600 font-semibold">{proj.createdBy?.name || "Unknown"}</span></span>
+                              <span>{new Date(proj.createdAt).toLocaleDateString()}</span>
                           </div>
                         </div>
-                    </div>
-                    ))
+                    </motion.div>
+                ))}
+                </AnimatePresence>
+                
+                {!loadingProjects && projects.length === 0 && (
+                    <p className="text-center text-gray-400 py-10">No projects yet.</p>
                 )}
               </div>
             </div>
